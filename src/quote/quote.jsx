@@ -159,6 +159,7 @@ export function App() {
     selectedPlanLabel: "",
     selectedBillingPeriod: "",
     selectedPremium: "",
+    captureStep: "idle",
   });
   const {
     deviceCategory = "",
@@ -178,6 +179,8 @@ export function App() {
   const totalPremium = quotation?.totalPremium;
   const hasPlans = comparisonGroups.length > 0;
   const selectedPlanId = selection?.selectedPlanId || "";
+  const captureStep = selection?.captureStep || "idle";
+  const isAwaitingFirstName = captureStep === "awaiting_first_name";
   const statusLabel = isLoading
     ? "Fetching quote"
     : isInsurable
@@ -191,7 +194,45 @@ export function App() {
       selectedPlanLabel: nextSelection.label,
       selectedBillingPeriod: nextSelection.billingPeriod,
       selectedPremium: nextSelection.totalPremium,
+      captureStep: "idle",
     });
+  };
+
+  const handleChoosePlan = async () => {
+    if (!selection?.selectedPlanId) {
+      return;
+    }
+
+    if (!window.openai?.sendFollowUpMessage) {
+      console.error("sendFollowUpMessage is not available in this context.");
+      return;
+    }
+
+    try {
+      await window.openai.sendFollowUpMessage({
+        prompt: (
+          "The user selected the "
+          + `${selection.selectedPlanLabel} ${selection.selectedBillingPeriod} `
+          + `plan at ${formatAmount(selection.selectedPremium)}. `
+          + "Please capture these values conversationally: first name, last name, email, "
+          + "phone number including country code, date of birth (dd-mm-yyyy), street, "
+          + "house number, zip code, city, country of residence, device brand, and either serial number or IMEI. "
+          + "After collecting all values, call the MCP tool "
+          + "`capture-applicant-values` with arguments: "
+          + "{ firstName, lastName, email, phoneNumber, dateOfBirth, street, houseNumber, "
+          + "zipCode, city, countryOfResidence, deviceBrand, serialNumber?, imei?, "
+          + `selectedPlanLabel: "${selection.selectedPlanLabel}", `
+          + `selectedBillingPeriod: "${selection.selectedBillingPeriod}", `
+          + `selectedPremium: "${formatAmount(selection.selectedPremium)}" }.`
+        ),
+      });
+      setSelection((prevState) => ({
+        ...(prevState ?? {}),
+        captureStep: "awaiting_first_name",
+      }));
+    } catch (error) {
+      console.error("Failed to continue conversation after plan selection:", error);
+    }
   };
 
   return (
@@ -250,15 +291,27 @@ export function App() {
               <strong>
                 {selection.selectedPlanLabel} {selection.selectedBillingPeriod} plan
               </strong>
-              <p>Review your choice and continue when you are ready.</p>
+              <p>
+                {isAwaitingFirstName
+                  ? "Continue in chat to provide your first and last name."
+                  : "Review your choice and continue when you are ready."}
+              </p>
             </div>
             <div className="quote-selection-actions">
               <div className="quote-selection-price">
                 {formatAmount(selection.selectedPremium)}
               </div>
-              <button className="quote-proceed-button" type="button">
-                Choose plan
-              </button>
+              {isAwaitingFirstName ? (
+                <div className="quote-followup-state">Continue in chat to provide your first and last name</div>
+              ) : (
+                <button
+                  className="quote-proceed-button"
+                  onClick={handleChoosePlan}
+                  type="button"
+                >
+                  Choose plan
+                </button>
+              )}
             </div>
           </section>
         ) : null}
