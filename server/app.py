@@ -1,40 +1,99 @@
-"""Application wiring for the Pizzaz Python MCP server."""
+"""Application wiring for the quotation MCP server."""
 
 from __future__ import annotations
 
 import os
 from copy import deepcopy
+from pathlib import Path
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
+from dotenv import load_dotenv
 from pydantic import AnyUrl, ValidationError
 
-if __package__:
-    from .schemas import PizzaInput, TOOL_INPUT_SCHEMA
+try:
+    if __package__:
+        from .schemas import (
+            QUOTATION_TOOL_INPUT_SCHEMA,
+            QuotationRequest,
+            QuotationResponse,
+        )
+    else:
+        from schemas import (
+            QUOTATION_TOOL_INPUT_SCHEMA,
+            QuotationRequest,
+            QuotationResponse,
+        )
+except ImportError:
+    from schemas import QUOTATION_TOOL_INPUT_SCHEMA, QuotationRequest, QuotationResponse
+
+try:
+    from .services.fidamy_api import (
+        FidamyApiAuthError,
+        FidamyApiClient,
+        FidamyApiParseError,
+        FidamyApiResponseError,
+        FidamyApiTimeoutError,
+    )
     from .widgets import (
         MIME_TYPE,
         WIDGETS,
         WIDGETS_BY_ID,
         WIDGETS_BY_URI,
-        TodoWidget,
+        QuoteWidget,
         resource_description,
         tool_invocation_meta,
         tool_meta,
     )
-else:
-    from schemas import PizzaInput, TOOL_INPUT_SCHEMA
+except ImportError:
+    from services.fidamy_api import (
+        FidamyApiAuthError,
+        FidamyApiClient,
+        FidamyApiParseError,
+        FidamyApiResponseError,
+        FidamyApiTimeoutError,
+    )
     from widgets import (
         MIME_TYPE,
         WIDGETS,
         WIDGETS_BY_ID,
         WIDGETS_BY_URI,
-        TodoWidget,
+        QuoteWidget,
         resource_description,
         tool_invocation_meta,
         tool_meta,
     )
+
+
+ROOT_DIR = Path(__file__).resolve().parent
+load_dotenv(ROOT_DIR / ".env")
+
+FIDEMY_BASE_URL = os.getenv("FIDEMY_BASE_URL")
+FIDEMY_API_KEY = os.getenv("FIDEMY_API_KEY")
+FIDEMY_TIMEOUT_SECONDS = float(os.getenv("FIDEMY_TIMEOUT_SECONDS", "10"))
+
+missing_env = [
+    name
+    for name, value in (
+        ("FIDEMY_BASE_URL", FIDEMY_BASE_URL),
+        ("FIDEMY_API_KEY", FIDEMY_API_KEY),
+    )
+    if not value
+]
+if missing_env:
+    raise RuntimeError(
+        "Missing required environment variables: "
+        + ", ".join(missing_env)
+        + ". Set them before starting the server."
+    )
+
+fidamy_client = FidamyApiClient(
+    base_url=str(FIDEMY_BASE_URL),
+    api_key=str(FIDEMY_API_KEY),
+    timeout_seconds=FIDEMY_TIMEOUT_SECONDS,
+)
 
 
 def _split_env_list(value: str | None) -> list[str]:
@@ -56,7 +115,7 @@ def _transport_security_settings() -> TransportSecuritySettings:
 
 
 mcp = FastMCP(
-    name="todo-server",
+    name="quote-server",
     stateless_http=True,
     transport_security=_transport_security_settings(),
 )
@@ -69,7 +128,7 @@ async def _list_tools() -> list[types.Tool]:
             name=widget.identifier,
             title=widget.title,
             description=widget.title,
-            inputSchema=deepcopy(TOOL_INPUT_SCHEMA),
+            inputSchema=deepcopy(QUOTATION_TOOL_INPUT_SCHEMA),
             _meta=tool_meta(widget),
             annotations=ToolAnnotations(
                 destructiveHint=False,
@@ -150,7 +209,7 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
 
     arguments = req.params.arguments or {}
     try:
-        payload = PizzaInput.model_validate(arguments)
+        payload = QuotationRequest.model_validate(arguments)
     except ValidationError as exc:
         return types.ServerResult(
             types.CallToolResult(
@@ -164,15 +223,44 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
             )
         )
 
-    return _tool_result(widget, payload.pizza_topping)
+    try:
+        quotation = await fidamy_client.quotation(payload)
+    except FidamyApiAuthError as exc:
+        return _tool_error_result(widget, f"Authentication error: {exc}")
+    except FidamyApiTimeoutError as exc:
+        return _tool_error_result(widget, f"Quotation request timed out: {exc}")
+    except (FidamyApiParseError, FidamyApiResponseError) as exc:
+        return _tool_error_result(widget, f"Unable to fetch quotation: {exc}")
+    print(3, quotation)
+    return _tool_result(widget, quotation)
 
 
-def _tool_result(widget: TodoWidget, topping: str) -> types.ServerResult:
+def _tool_result(
+    widget: QuoteWidget, quotation: QuotationResponse
+) -> types.ServerResult:
     return types.ServerResult(
         types.CallToolResult(
-            content=[types.TextContent(type="text", text=widget.response_text)],
-            structuredContent={"pizzaTopping": topping},
+            content=[
+                types.TextContent(
+                    type="text",
+                    text=(
+                        f"{widget.response_text} "
+                        f"Generated a quotation for {quotation.device_category}."
+                    ),
+                )
+            ],
+            structuredContent=quotation.model_dump(by_alias=True, mode="json"),
             _meta=tool_invocation_meta(widget),
+        )
+    )
+
+
+def _tool_error_result(widget: QuoteWidget, message: str) -> types.ServerResult:
+    return types.ServerResult(
+        types.CallToolResult(
+            content=[types.TextContent(type="text", text=message)],
+            _meta=tool_invocation_meta(widget),
+            isError=True,
         )
     )
 
