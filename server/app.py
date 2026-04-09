@@ -16,18 +16,28 @@ from pydantic import AnyUrl, ValidationError
 try:
     if __package__:
         from .schemas import (
+            APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA,
+            ApplicantCaptureRequest,
             QUOTATION_TOOL_INPUT_SCHEMA,
             QuotationRequest,
             QuotationResponse,
         )
     else:
         from schemas import (
+            APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA,
+            ApplicantCaptureRequest,
             QUOTATION_TOOL_INPUT_SCHEMA,
             QuotationRequest,
             QuotationResponse,
         )
 except ImportError:
-    from schemas import QUOTATION_TOOL_INPUT_SCHEMA, QuotationRequest, QuotationResponse
+    from schemas import (
+        APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA,
+        ApplicantCaptureRequest,
+        QUOTATION_TOOL_INPUT_SCHEMA,
+        QuotationRequest,
+        QuotationResponse,
+    )
 
 try:
     from .services.fidamy_api import (
@@ -120,24 +130,43 @@ mcp = FastMCP(
     transport_security=_transport_security_settings(),
 )
 
+CAPTURE_TOOL_NAME = "capture-applicant-values"
+CAPTURE_TOOL_TITLE = "Capture applicant values"
+
 
 @mcp._mcp_server.list_tools()
 async def _list_tools() -> list[types.Tool]:
-    return [
+    tools = [
         types.Tool(
-            name=widget.identifier,
-            title=widget.title,
-            description=widget.title,
+            name="quote",
+            title=WIDGETS_BY_ID["quote"].title,
+            description=WIDGETS_BY_ID["quote"].title,
             inputSchema=deepcopy(QUOTATION_TOOL_INPUT_SCHEMA),
-            _meta=tool_meta(widget),
+            _meta=tool_meta(WIDGETS_BY_ID["quote"]),
             annotations=ToolAnnotations(
                 destructiveHint=False,
                 openWorldHint=False,
                 readOnlyHint=True,
             ),
         )
-        for widget in WIDGETS
     ]
+    tools.append(
+        types.Tool(
+            name=CAPTURE_TOOL_NAME,
+            title=CAPTURE_TOOL_TITLE,
+            description=(
+                "Capture applicant personal details, address, device identifiers, "
+                "and selected plan details for the next application step."
+            ),
+            inputSchema=deepcopy(APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA),
+            annotations=ToolAnnotations(
+                destructiveHint=False,
+                openWorldHint=False,
+                readOnlyHint=False,
+            ),
+        )
+    )
+    return tools
 
 
 @mcp._mcp_server.list_resources()
@@ -172,6 +201,10 @@ async def _list_resource_templates() -> list[types.ResourceTemplate]:
 
 async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerResult:
     widget = WIDGETS_BY_URI.get(str(req.params.uri))
+    if widget is None and str(req.params.uri).startswith("ui://widget/"):
+        # Compatibility fallback: serve the primary quote widget for stale/cached
+        # widget URIs that may still be referenced by older tool metadata.
+        widget = WIDGETS_BY_ID.get("quote")
     if widget is None:
         return types.ServerResult(
             types.ReadResourceResult(
@@ -193,6 +226,31 @@ async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerR
 
 
 async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
+    print(
+        "[mcp] call_tool:",
+        req.params.name,
+        "arguments=",
+        req.params.arguments or {},
+        flush=True,
+    )
+    arguments = req.params.arguments or {}
+    if req.params.name == CAPTURE_TOOL_NAME:
+        try:
+            capture_payload = ApplicantCaptureRequest.model_validate(arguments)
+        except ValidationError as exc:
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[
+                        types.TextContent(
+                            type="text",
+                            text=f"Input validation error: {exc.errors()}",
+                        )
+                    ],
+                    isError=True,
+                )
+            )
+        return _capture_values_result(capture_payload)
+
     widget = WIDGETS_BY_ID.get(req.params.name)
     if widget is None:
         return types.ServerResult(
@@ -207,7 +265,6 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
             )
         )
 
-    arguments = req.params.arguments or {}
     try:
         payload = QuotationRequest.model_validate(arguments)
     except ValidationError as exc:
@@ -223,6 +280,12 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
             )
         )
 
+    print(
+        "[quote] validated input:",
+        payload.model_dump(by_alias=True, mode="json"),
+        flush=True,
+    )
+
     try:
         quotation = await fidamy_client.quotation(payload)
     except FidamyApiAuthError as exc:
@@ -231,7 +294,11 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
         return _tool_error_result(widget, f"Quotation request timed out: {exc}")
     except (FidamyApiParseError, FidamyApiResponseError) as exc:
         return _tool_error_result(widget, f"Unable to fetch quotation: {exc}")
-    print(3, quotation)
+    print(
+        "[quote] normalized response:",
+        quotation.model_dump(by_alias=True, mode="json"),
+        flush=True,
+    )
     return _tool_result(widget, quotation)
 
 
@@ -261,6 +328,33 @@ def _tool_error_result(widget: QuoteWidget, message: str) -> types.ServerResult:
             content=[types.TextContent(type="text", text=message)],
             _meta=tool_invocation_meta(widget),
             isError=True,
+        )
+    )
+
+
+def _capture_values_result(payload: ApplicantCaptureRequest) -> types.ServerResult:
+    payload_json = payload.model_dump(by_alias=True, mode="json")
+    print("[applicant] captured values:", payload_json, flush=True)
+    device_id = payload.serial_number or payload.imei or "-"
+    device_id_type = "serialNumber" if payload.serial_number else "imei"
+    return types.ServerResult(
+        types.CallToolResult(
+            content=[
+                types.TextContent(
+                    type="text",
+                    text=(
+                        "Captured applicant profile for "
+                        f"{payload.first_name} {payload.last_name}. "
+                        f"Contact: {payload.email}, {payload.phone_number}. "
+                        f"DOB: {payload.date_of_birth}. "
+                        f"Address: {payload.street} {payload.house_number}, "
+                        f"{payload.zip_code} {payload.city}, {payload.country_of_residence}. "
+                        f"Device: {payload.device_brand} ({device_id_type}: {device_id}). "
+                        f"Plan: {payload.selected_plan_label} {payload.selected_billing_period} "
+                        f"at {payload.selected_premium}."
+                    ),
+                )
+            ]
         )
     )
 
