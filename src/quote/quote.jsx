@@ -1,6 +1,6 @@
 import "./quote.css";
 
-import { CheckCircle2, Shield, Smartphone, WalletCards } from "lucide-react";
+import { CheckCircle2, Shield, Smartphone } from "lucide-react";
 
 import { useOpenAiGlobal } from "../use-openai-global";
 import { useWidgetState } from "../use-widget-state";
@@ -38,7 +38,7 @@ function planId(billingPeriod, plan) {
   return `${billingPeriod}:${plan?.plan || "unknown"}`;
 }
 
-function PlanCard({ billingPeriod, plan, isSelected, onSelect }) {
+function PlanOptionCard({ billingPeriod, plan, isSelected, onSelect }) {
   const planLabel = plan?.labels?.en || formatPlanName(plan?.plan);
   const features = Array.isArray(plan?.features) ? plan.features : [];
   const selectionId = planId(billingPeriod, plan);
@@ -59,7 +59,7 @@ function PlanCard({ billingPeriod, plan, isSelected, onSelect }) {
     >
       <div className="quote-plan-header">
         <div>
-          <p className="quote-plan-kicker">{plan?.plan || "plan"}</p>
+          <p className="quote-plan-kicker">{billingPeriod}</p>
           <h3>{planLabel}</h3>
         </div>
         <div className="quote-plan-price-wrap">
@@ -83,8 +83,39 @@ function PlanCard({ billingPeriod, plan, isSelected, onSelect }) {
   );
 }
 
-function PlanGroup({ title, icon: Icon, plans, billingPeriod, selectedId, onSelect }) {
-  if (!plans.length) {
+function buildComparisonGroups(monthlyPlans, yearlyPlans) {
+  const groups = new Map();
+
+  for (const plan of monthlyPlans) {
+    const key = plan?.plan || "unknown";
+    groups.set(key, {
+      key,
+      label: plan?.labels?.en || formatPlanName(key),
+      monthly: plan,
+      yearly: null,
+    });
+  }
+
+  for (const plan of yearlyPlans) {
+    const key = plan?.plan || "unknown";
+    const existing = groups.get(key);
+    if (existing) {
+      existing.yearly = plan;
+    } else {
+      groups.set(key, {
+        key,
+        label: plan?.labels?.en || formatPlanName(key),
+        monthly: null,
+        yearly: plan,
+      });
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+function ComparisonGroup({ group, selectedId, onSelect }) {
+  if (!group.monthly && !group.yearly) {
     return null;
   }
 
@@ -92,23 +123,30 @@ function PlanGroup({ title, icon: Icon, plans, billingPeriod, selectedId, onSele
     <section className="quote-group">
       <div className="quote-group-header">
         <div className="quote-group-icon">
-          <Icon size={16} strokeWidth={1.8} />
+          <Shield size={16} strokeWidth={1.8} />
         </div>
         <div>
-          <p className="quote-group-kicker">Coverage options</p>
-          <h2>{title}</h2>
+          <p className="quote-group-kicker">Plan type</p>
+          <h2>{group.label}</h2>
         </div>
       </div>
       <div className="quote-plan-grid">
-        {plans.map((plan) => (
-          <PlanCard
-            key={`${title}-${plan.plan}`}
-            billingPeriod={billingPeriod}
-            isSelected={selectedId === planId(billingPeriod, plan)}
+        {group.monthly ? (
+          <PlanOptionCard
+            billingPeriod="monthly"
+            isSelected={selectedId === planId("monthly", group.monthly)}
             onSelect={onSelect}
-            plan={plan}
+            plan={group.monthly}
           />
-        ))}
+        ) : null}
+        {group.yearly ? (
+          <PlanOptionCard
+            billingPeriod="yearly"
+            isSelected={selectedId === planId("yearly", group.yearly)}
+            onSelect={onSelect}
+            plan={group.yearly}
+          />
+        ) : null}
       </div>
     </section>
   );
@@ -134,10 +172,11 @@ export function App() {
 
   const monthlyPlans = Array.isArray(quotation?.monthly) ? quotation.monthly : [];
   const yearlyPlans = Array.isArray(quotation?.yearly) ? quotation.yearly : [];
+  const comparisonGroups = buildComparisonGroups(monthlyPlans, yearlyPlans);
   const isLoading = rawToolOutput == null;
   const isInsurable = quotation?.insurable === true;
   const totalPremium = quotation?.totalPremium;
-  const hasPlans = monthlyPlans.length > 0 || yearlyPlans.length > 0;
+  const hasPlans = comparisonGroups.length > 0;
   const selectedPlanId = selection?.selectedPlanId || "";
   const statusLabel = isLoading
     ? "Fetching quote"
@@ -164,8 +203,12 @@ export function App() {
               <Shield size={16} strokeWidth={1.8} />
               Extended warranty quotation
             </div>
-            <h1>Choose a protection plan</h1>
-            <p>Compare available monthly and yearly coverage for your device.</p>
+            <h1>
+              Here are the insurance options for your{" "}
+              {formatCategoryLabel(deviceCategory).toLowerCase()} worth{" "}
+              {formatAmount(deviceMarketValue)}
+            </h1>
+            <p>Compare available monthly and yearly coverage, then choose a plan.</p>
           </div>
           <div className="quote-summary-metrics">
             <div className="quote-status-pill">
@@ -255,22 +298,14 @@ export function App() {
           </section>
         ) : (
           <div className="quote-groups">
-            <PlanGroup
-              billingPeriod="monthly"
-              icon={Smartphone}
-              onSelect={handleSelectPlan}
-              plans={monthlyPlans}
-              selectedId={selectedPlanId}
-              title="Monthly plans"
-            />
-            <PlanGroup
-              billingPeriod="yearly"
-              icon={WalletCards}
-              onSelect={handleSelectPlan}
-              plans={yearlyPlans}
-              selectedId={selectedPlanId}
-              title="Yearly plans"
-            />
+            {comparisonGroups.map((group) => (
+              <ComparisonGroup
+                group={group}
+                key={group.key}
+                onSelect={handleSelectPlan}
+                selectedId={selectedPlanId}
+              />
+            ))}
           </div>
         )}
       </div>
