@@ -148,9 +148,7 @@ async def _list_tools() -> list[types.Tool]:
                 openWorldHint=False,
                 readOnlyHint=True,
             ),
-        )
-    ]
-    tools.append(
+        ),
         types.Tool(
             name=CAPTURE_TOOL_NAME,
             title=CAPTURE_TOOL_TITLE,
@@ -164,8 +162,8 @@ async def _list_tools() -> list[types.Tool]:
                 openWorldHint=False,
                 readOnlyHint=False,
             ),
-        )
-    )
+        ),
+    ]
     return tools
 
 
