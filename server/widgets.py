@@ -1,4 +1,4 @@
-"""Widget definitions and static asset loading for the Pizzaz server."""
+"""Widget definitions and static asset loading for the quotation server."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class TodoWidget:
+class QuoteWidget:
     identifier: str
     title: str
     template_uri: str
@@ -39,14 +39,14 @@ def load_widget_html(component_name: str) -> str:
 
 
 WIDGETS = [
-    TodoWidget(
-        identifier="todo",
-        title="Show Todo List",
-        template_uri="ui://widget/todo.html",
-        invoking="Creating a todo list",
-        invoked="Served a fresh todo list",
-        html=load_widget_html("todo"),
-        response_text="Rendered a pizza map!",
+    QuoteWidget(
+        identifier="quote",
+        title="Generate quotation",
+        template_uri="ui://widget/quote.html",
+        invoking="Preparing your quotation",
+        invoked="Served a fresh quotation",
+        html=load_widget_html("quote"),
+        response_text="Rendered quotation details!",
     ),
 ]
 
@@ -54,11 +54,11 @@ WIDGETS_BY_ID = {widget.identifier: widget for widget in WIDGETS}
 WIDGETS_BY_URI = {widget.template_uri: widget for widget in WIDGETS}
 
 
-def resource_description(widget: TodoWidget) -> str:
+def resource_description(widget: QuoteWidget) -> str:
     return f"{widget.title} widget markup"
 
 
-def tool_meta(widget: TodoWidget) -> dict[str, str | bool]:
+def tool_meta(widget: QuoteWidget) -> dict[str, str | bool]:
     return {
         "openai/outputTemplate": widget.template_uri,
         "openai/toolInvocation/invoking": widget.invoking,
@@ -67,7 +67,7 @@ def tool_meta(widget: TodoWidget) -> dict[str, str | bool]:
     }
 
 
-def tool_invocation_meta(widget: TodoWidget) -> dict[str, str]:
+def tool_invocation_meta(widget: QuoteWidget) -> dict[str, str]:
     return {
         "openai/toolInvocation/invoking": widget.invoking,
         "openai/toolInvocation/invoked": widget.invoked,
