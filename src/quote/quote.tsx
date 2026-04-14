@@ -112,9 +112,8 @@ function buildCapturePrompt(selection: SelectionState): string {
     "The user selected the "
     + `${selection.selectedPlanLabel} ${selection.selectedBillingPeriod} `
     + `plan at ${formatAmount(selection.selectedPremium)}. `
-    + "Please capture these values conversationally: first name, last name, email, "
-    + "phone number including country code, date of birth (dd-mm-yyyy), street, "
-    + "house number, zip code, city, country of residence, device brand, and either serial number or IMEI. "
+    + "Please collect the required details one by one, asking only one question per assistant message and waiting for the user's answer before asking the next field. "
+    + "Use this exact order: first name, last name, email, phone number including country code, date of birth (dd-mm-yyyy), street, house number, zip code, city, country of residence, device brand, then either serial number or IMEI. "
     + "After collecting all values, call the MCP tool "
     + "`capture-applicant-values` with arguments: "
     + "{ firstName, lastName, email, phoneNumber, dateOfBirth, street, houseNumber, "

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DEVICE_CATEGORIES = (
     "Smartphone",
@@ -143,6 +144,84 @@ class ApplicantCaptureRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
+    @field_validator(
+        "first_name",
+        "last_name",
+        "email",
+        "phone_number",
+        "date_of_birth",
+        "street",
+        "house_number",
+        "zip_code",
+        "city",
+        "country_of_residence",
+        "device_brand",
+        "selected_plan_label",
+        "selected_premium",
+        mode="before",
+    )
+    @classmethod
+    def normalize_required_strings(cls, value: object) -> str:
+        text = str(value).strip() if value is not None else ""
+        if not text:
+            raise ValueError("This field is required and cannot be empty.")
+        return text
+
+    @field_validator("serial_number", "imei", mode="before")
+    @classmethod
+    def normalize_optional_identifiers(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, value: str) -> str:
+        if "@" not in value or "." not in value.split("@")[-1]:
+            raise ValueError("Email must be a valid email address.")
+        return value
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone_number(cls, value: str) -> str:
+        if not value.startswith("+") or not value[1:].isdigit():
+            raise ValueError(
+                "Phone number must include country code in E.164 format (example: +31612345678)."
+            )
+        if len(value) < 8 or len(value) > 16:
+            raise ValueError("Phone number must be between 8 and 16 characters.")
+        return value
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_date_of_birth(cls, value: str) -> str:
+        try:
+            parsed = datetime.strptime(value, "%d-%m-%Y").date()
+        except ValueError as exc:
+            raise ValueError("dateOfBirth must be a valid date in dd-mm-yyyy format.") from exc
+        if parsed >= date.today():
+            raise ValueError("dateOfBirth must be in the past.")
+        return value
+
+    @field_validator("imei")
+    @classmethod
+    def validate_imei(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.isdigit() or len(value) != 15:
+            raise ValueError("IMEI must be a 15-digit numeric string.")
+        return value
+
+    @field_validator("serial_number")
+    @classmethod
+    def validate_serial_number(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if len(value) < 5:
+            raise ValueError("serialNumber must be at least 5 characters.")
+        return value
+
     @model_validator(mode="after")
     def ensure_device_identifier(self) -> "ApplicantCaptureRequest":
         if not (self.serial_number or self.imei):
@@ -188,6 +267,7 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         },
         "phoneNumber": {
             "type": "string",
+            "pattern": "^\\+[1-9]\\d{6,14}$",
             "description": "Applicant phone number including country code (for example +31612345678).",
         },
         "dateOfBirth": {
@@ -221,10 +301,12 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         },
         "serialNumber": {
             "type": "string",
+            "minLength": 5,
             "description": "Device serial number.",
         },
         "imei": {
             "type": "string",
+            "pattern": "^\\d{15}$",
             "description": "Device IMEI number.",
         },
         "selectedPlanLabel": {
