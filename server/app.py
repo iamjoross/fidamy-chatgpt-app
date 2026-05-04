@@ -224,14 +224,8 @@ async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerR
 
 
 async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
-    print(
-        "[mcp] call_tool:",
-        req.params.name,
-        "arguments=",
-        req.params.arguments or {},
-        flush=True,
-    )
     arguments = req.params.arguments or {}
+
     if req.params.name == CAPTURE_TOOL_NAME:
         try:
             capture_payload = ApplicantCaptureRequest.model_validate(arguments)
@@ -247,7 +241,45 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
                     isError=True,
                 )
             )
-        return _capture_values_result(capture_payload)
+        try:
+            intent_response = await fidamy_client.create_intent(capture_payload)
+        except FidamyApiAuthError as exc:
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[
+                        types.TextContent(
+                            type="text",
+                            text=f"Authentication error while creating intent: {exc}",
+                        )
+                    ],
+                    isError=True,
+                )
+            )
+        except FidamyApiTimeoutError as exc:
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[
+                        types.TextContent(
+                            type="text",
+                            text=f"Intent request timed out: {exc}",
+                        )
+                    ],
+                    isError=True,
+                )
+            )
+        except (FidamyApiParseError, FidamyApiResponseError) as exc:
+            return types.ServerResult(
+                types.CallToolResult(
+                    content=[
+                        types.TextContent(
+                            type="text",
+                            text=f"Unable to create intent: {exc}",
+                        )
+                    ],
+                    isError=True,
+                )
+            )
+        return _capture_values_result(capture_payload, intent_response)
 
     widget = WIDGETS_BY_ID.get(req.params.name)
     if widget is None:
@@ -278,12 +310,6 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
             )
         )
 
-    print(
-        "[quote] validated input:",
-        payload.model_dump(by_alias=True, mode="json"),
-        flush=True,
-    )
-
     try:
         quotation = await fidamy_client.quotation(payload)
     except FidamyApiAuthError as exc:
@@ -292,11 +318,7 @@ async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
         return _tool_error_result(widget, f"Quotation request timed out: {exc}")
     except (FidamyApiParseError, FidamyApiResponseError) as exc:
         return _tool_error_result(widget, f"Unable to fetch quotation: {exc}")
-    print(
-        "[quote] normalized response:",
-        quotation.model_dump(by_alias=True, mode="json"),
-        flush=True,
-    )
+
     return _tool_result(widget, quotation)
 
 
@@ -330,29 +352,48 @@ def _tool_error_result(widget: QuoteWidget, message: str) -> types.ServerResult:
     )
 
 
-def _capture_values_result(payload: ApplicantCaptureRequest) -> types.ServerResult:
-    payload_json = payload.model_dump(by_alias=True, mode="json")
-    print("[applicant] captured values:", payload_json, flush=True)
+def _capture_values_result(
+    payload: ApplicantCaptureRequest,
+    intent_response: dict[str, object],
+) -> types.ServerResult:
+    intent_url = str(intent_response.get("url", "")).strip()
     device_id = payload.serial_number or payload.imei or "-"
     device_id_type = "serialNumber" if payload.serial_number else "imei"
+
+    if intent_url:
+        user_text = (
+            "Your insurance is waiting for you. Please complete your purchase here:\n\n"
+            f"[Get your insurance]({intent_url})\n"
+            f"{intent_url}\n\n"
+            "On the distribution flow you will confirm a few details and provide your payment information. "
+            "The link is valid for 24 hours."
+        )
+    else:
+        user_text = (
+            "Captured applicant profile for "
+            f"{payload.first_name} {payload.last_name}. "
+            f"Contact: {payload.email}, {payload.phone_number}. "
+            f"DOB: {payload.date_of_birth}. "
+            f"Address: {payload.street} {payload.house_number}, "
+            f"{payload.zip_code} {payload.city}, {payload.country_of_residence}. "
+            f"Device: {payload.device_brand} ({device_id_type}: {device_id}). "
+            f"Plan: {payload.selected_plan_label} {payload.selected_billing_period} "
+            f"at {payload.selected_premium}. "
+            "Intent request sent to Fidamy."
+        )
     return types.ServerResult(
         types.CallToolResult(
             content=[
                 types.TextContent(
                     type="text",
-                    text=(
-                        "Captured applicant profile for "
-                        f"{payload.first_name} {payload.last_name}. "
-                        f"Contact: {payload.email}, {payload.phone_number}. "
-                        f"DOB: {payload.date_of_birth}. "
-                        f"Address: {payload.street} {payload.house_number}, "
-                        f"{payload.zip_code} {payload.city}, {payload.country_of_residence}. "
-                        f"Device: {payload.device_brand} ({device_id_type}: {device_id}). "
-                        f"Plan: {payload.selected_plan_label} {payload.selected_billing_period} "
-                        f"at {payload.selected_premium}."
-                    ),
+                    text=user_text,
                 )
-            ]
+            ],
+            structuredContent={
+                "url": intent_url,
+                "intent": intent_response,
+                "intentUrl": intent_url,
+            },
         )
     )
 

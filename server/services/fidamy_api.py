@@ -9,11 +9,11 @@ from pydantic import ValidationError
 
 try:
     if __package__ and "." in __package__:
-        from ..schemas import QuotationRequest, QuotationResponse
+        from ..schemas import ApplicantCaptureRequest, QuotationRequest, QuotationResponse
     else:
-        from schemas import QuotationRequest, QuotationResponse
+        from schemas import ApplicantCaptureRequest, QuotationRequest, QuotationResponse
 except ImportError:
-    from schemas import QuotationRequest, QuotationResponse
+    from schemas import ApplicantCaptureRequest, QuotationRequest, QuotationResponse
 
 
 class FidamyApiError(Exception):
@@ -44,6 +44,7 @@ class FidamyApiClient:
     """Single-purpose client for Fidamy quotation requests."""
 
     _quotation_path = "/quotes/preview"
+    _intent_path = "/intents"
     _attribution_code = "fidamyagentic_d2c"
     _campaign_code = "springsale2026"
 
@@ -65,6 +66,14 @@ class FidamyApiClient:
         )
         return self._parse_quotation_response(payload, response_payload)
 
+    async def create_intent(self, payload: ApplicantCaptureRequest) -> dict[str, Any]:
+        response_payload = await self._request(
+            "POST",
+            self._intent_path,
+            json=self._intent_payload(payload),
+        )
+        return response_payload
+
     def _headers(self) -> dict[str, str]:
         return {
             "Accept": "application/json",
@@ -78,6 +87,47 @@ class FidamyApiClient:
         request_payload["attributionCode"] = self._attribution_code
         request_payload["campaignCode"] = self._campaign_code
         return request_payload
+
+    def _intent_payload(self, payload: ApplicantCaptureRequest) -> dict[str, Any]:
+        coverage = "extended"
+        if payload.selected_plan_label.strip().lower().startswith("basic"):
+            coverage = "basic"
+        elif payload.selected_plan_label.strip().lower().startswith("extended"):
+            coverage = "extended"
+
+        return {
+            "attributionCode": self._attribution_code,
+            "campaignCode": self._campaign_code,
+            "journeyType": "express",
+            "handoffChannel": "url",
+            "product": {
+                "coverage": coverage,
+                "billingCycle": payload.selected_billing_period,
+            },
+            "insuredObject": {
+                "serialNo": payload.serial_number,
+                "imei": payload.imei,
+                "deviceBrand": payload.device_brand,
+                "deviceModel": payload.device_model,
+                "deviceCategory": payload.device_category,
+                "deviceMarketValue": payload.device_market_value,
+            },
+            "policyholder": {
+                "firstName": payload.first_name,
+                "lastName": payload.last_name,
+                "birthday": self._format_birthday(payload.date_of_birth),
+                "email": payload.email,
+                "phoneNo": payload.phone_no,
+                "phoneCountryCode": payload.phone_country_code,
+                "address": {
+                    "zipCode": payload.zip_code,
+                    "street": payload.street,
+                    "houseNo": payload.house_number,
+                    "city": payload.city,
+                    "residenceCountry": payload.country_of_residence,
+                },
+            },
+        }
 
     async def _request(
         self,
@@ -148,3 +198,8 @@ class FidamyApiClient:
     def _response_text(response: httpx.Response) -> str:
         text = response.text.strip()
         return text or "No response body provided."
+
+    @staticmethod
+    def _format_birthday(date_of_birth: str) -> str:
+        day, month, year = date_of_birth.split("-")
+        return f"{year}-{month}-{day}"

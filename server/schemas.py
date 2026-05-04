@@ -80,6 +80,16 @@ class ApplicantCaptureRequest(BaseModel):
         alias="phoneNumber",
         description="Applicant phone number including country code (for example +31612345678).",
     )
+    phone_country_code: str = Field(
+        ...,
+        alias="phoneCountryCode",
+        description="Phone country code extracted from phoneNumber (for example +31).",
+    )
+    phone_no: str = Field(
+        ...,
+        alias="phoneNo",
+        description="Local phone number without country code (for example 612345678).",
+    )
     date_of_birth: str = Field(
         ...,
         alias="dateOfBirth",
@@ -115,6 +125,21 @@ class ApplicantCaptureRequest(BaseModel):
         ...,
         alias="deviceBrand",
         description="Brand of the insured device.",
+    )
+    device_model: str = Field(
+        ...,
+        alias="deviceModel",
+        description="Model of the insured device (for example iPhone 17).",
+    )
+    device_category: DeviceCategory = Field(
+        ...,
+        alias="deviceCategory",
+        description="Category of the insured device.",
+    )
+    device_market_value: str = Field(
+        ...,
+        alias="deviceMarketValue",
+        description="Current market value of the device as text.",
     )
     serial_number: str | None = Field(
         default=None,
@@ -156,6 +181,9 @@ class ApplicantCaptureRequest(BaseModel):
         "city",
         "country_of_residence",
         "device_brand",
+        "device_model",
+        "phone_country_code",
+        "phone_no",
         "selected_plan_label",
         "selected_premium",
         mode="before",
@@ -193,6 +221,24 @@ class ApplicantCaptureRequest(BaseModel):
             raise ValueError("Phone number must be between 8 and 16 characters.")
         return value
 
+    @field_validator("phone_country_code")
+    @classmethod
+    def validate_phone_country_code(cls, value: str) -> str:
+        if not value.startswith("+") or not value[1:].isdigit():
+            raise ValueError("phoneCountryCode must start with + and contain digits.")
+        if len(value) < 2 or len(value) > 5:
+            raise ValueError("phoneCountryCode must be between 2 and 5 characters.")
+        return value
+
+    @field_validator("phone_no")
+    @classmethod
+    def validate_phone_no(cls, value: str) -> str:
+        if not value.isdigit():
+            raise ValueError("phoneNo must contain digits only.")
+        if len(value) < 4:
+            raise ValueError("phoneNo must contain at least 4 digits.")
+        return value
+
     @field_validator("date_of_birth")
     @classmethod
     def validate_date_of_birth(cls, value: str) -> str:
@@ -220,6 +266,17 @@ class ApplicantCaptureRequest(BaseModel):
             return None
         if len(value) < 5:
             raise ValueError("serialNumber must be at least 5 characters.")
+        return value
+
+    @field_validator("device_market_value")
+    @classmethod
+    def validate_device_market_value(cls, value: str) -> str:
+        try:
+            numeric = float(value)
+        except ValueError as exc:
+            raise ValueError("deviceMarketValue must be numeric text.") from exc
+        if numeric <= 0:
+            raise ValueError("deviceMarketValue must be greater than zero.")
         return value
 
     @model_validator(mode="after")
@@ -270,6 +327,16 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
             "pattern": "^\\+[1-9]\\d{6,14}$",
             "description": "Applicant phone number including country code (for example +31612345678).",
         },
+        "phoneCountryCode": {
+            "type": "string",
+            "pattern": "^\\+[1-9]\\d{0,3}$",
+            "description": "Phone country code (for example +31).",
+        },
+        "phoneNo": {
+            "type": "string",
+            "pattern": "^\\d{4,14}$",
+            "description": "Local phone number without country code.",
+        },
         "dateOfBirth": {
             "type": "string",
             "pattern": "^\\d{2}-\\d{2}-\\d{4}$",
@@ -298,6 +365,19 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         "deviceBrand": {
             "type": "string",
             "description": "Brand of the insured device.",
+        },
+        "deviceModel": {
+            "type": "string",
+            "description": "Model of the insured device (for example iPhone 17).",
+        },
+        "deviceCategory": {
+            "type": "string",
+            "enum": list(DEVICE_CATEGORIES),
+            "description": "Category of the insured device.",
+        },
+        "deviceMarketValue": {
+            "type": "string",
+            "description": "Current market value of the device as text.",
         },
         "serialNumber": {
             "type": "string",
@@ -328,6 +408,8 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         "lastName",
         "email",
         "phoneNumber",
+        "phoneCountryCode",
+        "phoneNo",
         "dateOfBirth",
         "street",
         "houseNumber",
@@ -335,6 +417,9 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         "city",
         "countryOfResidence",
         "deviceBrand",
+        "deviceModel",
+        "deviceCategory",
+        "deviceMarketValue",
         "selectedPlanLabel",
         "selectedBillingPeriod",
         "selectedPremium",
