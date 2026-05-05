@@ -40,10 +40,28 @@
   }
 }
 
+html,
+body,
+#quote-root {
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#quote-root::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  margin: 0;
+}
+
 .quote-widget-shell {
   max-width: 1160px;
   margin: 0 auto;
   padding: 10px;
+  overflow: hidden;
   background: var(--fidamy-bg);
   color: var(--fidamy-text);
   font-family:
