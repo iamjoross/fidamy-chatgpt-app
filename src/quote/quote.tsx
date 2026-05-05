@@ -1,7 +1,6 @@
 import "./quote.css";
 
 import { useEffect, useState } from "react";
-import { Shield } from "lucide-react";
 import { buildCapturePrompt } from "./utils";
 
 import { useOpenAiGlobal } from "../use-openai-global";
@@ -19,7 +18,6 @@ import {
   DEV_MOCK_WIDGET_PROPS,
   DEFAULT_SELECTION_STATE,
 } from "./constants";
-import { formatAmount, formatCategoryLabel } from "./utils";
 
 export function App() {
   const rawToolOutput = useOpenAiGlobal("toolOutput");
@@ -117,28 +115,6 @@ export function App() {
 
   return (
     <div className="quote-widget-shell">
-      <header className="quote-summary">
-        <div className="quote-summary-copy">
-          <div className="quote-badge">
-            <Shield size={16} strokeWidth={1.8} />
-            Review your coverage
-          </div>
-          <h1>
-            Here are the insurance options for your{" "}
-            {formatCategoryLabel(deviceCategory).toLowerCase()}(
-            {formatAmount(deviceMarketValue)})
-          </h1>
-        </div>
-        <div className="quote-summary-metrics">
-          <div className="quote-facts">
-            <div className="quote-fact">
-              <span>Category</span>
-              <strong>{formatCategoryLabel(deviceCategory)}</strong>
-            </div>
-          </div>
-        </div>
-      </header>
-
       {!isLoading && selectedPlanId ? (
         <SelectionSummary
           isAwaitingFirstName={isAwaitingFirstName}
