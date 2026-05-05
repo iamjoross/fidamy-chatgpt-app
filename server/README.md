@@ -2,6 +2,8 @@
 
 This directory packages the Python MCP server for the `chatgpt-app` demo using the official `mcp` package and `FastMCP` helper. It exposes widget markup as resources and tool definitions for the OpenAI Apps SDK.
 
+For full project setup, widget build steps, and ChatGPT connector instructions, see the [main README](../README.md).
+
 The code is split into small modules:
 
 - `app.py` wires `FastMCP`, request handlers, and the Starlette-compatible ASGI app.

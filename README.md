@@ -1,179 +1,216 @@
 # ChatGPT App: Insurance Quote Widget
 
-A modern insurance quote comparison widget built with React and the [OpenAI Apps SDK](https://developers.openai.com/apps-sdk). This app demonstrates how to build interactive UI components that integrate with ChatGPT through the Model Context Protocol (MCP).
+A ChatGPT Apps SDK widget for comparing Fidamy device-insurance quotes. The app exposes a single `quote` MCP tool, renders returned monthly/yearly plans as compact ChatGPT-style cards, and continues the purchase flow conversationally after a user selects a package.
+
+For broader Apps SDK examples and baseline setup guidance, see the [OpenAI Apps SDK examples README](https://github.com/openai/openai-apps-sdk-examples/blob/main/README.md).
 
 ## Overview
 
-This application allows users to:
+This app lets users:
 
-- Browse insurance plan options for their devices
-- Compare monthly and yearly billing periods
-- Select a plan and provide applicant information through a conversational flow
-- Seamlessly transition to checkout with captured details
+- Request insurance quotes for a supported device category and market value
+- Compare monthly and yearly coverage packages
+- Expand each package to review covered damage/theft details
+- Select a package in the widget
+- Continue in chat to confirm whether they want to purchase the selected package
+- Provide applicant and device details through a guided conversation
+- Receive a checkout URL after the purchase intent is created
 
-The frontend is a React-based widget with modular component architecture, while the backend is a Python MCP server that handles tool invocations and API integrations.
+The frontend is a React widget bundled as static assets. The backend is a Python MCP server built with `FastMCP` that advertises the widget resource and handles quote/capture tool calls.
 
-## Architecture
+## Project Structure
 
-```
+```text
 chatgpt-app/
-├── src/                          # React frontend
-│   ├── quote/                    # Quote widget module
-│   │   ├── quote.tsx            # Main component
-│   │   ├── types.ts             # TypeScript types
-│   │   ├── utils.ts             # Utilities (formatting, capture-prompt)
-│   │   ├── constants.ts         # Mock data and defaults
-│   │   ├── quote.css
-│   │   └── components/          # Modular sub-components
-│   │       ├── PlanOptionCard.tsx
-│   │       ├── SelectionSummary.tsx
-│   │       ├── LoadingState.tsx
-│   │       ├── EmptyState.tsx
-│   │       ├── BillingPeriodSection.tsx
-│   │       └── QuoteResults.tsx
-│   └── (hooks and utilities)
-├── server/                       # Python MCP server
-│   ├── app.py                   # FastMCP setup & ASGI app
-│   ├── handlers.py              # Tool-specific business logic
-│   ├── mcp_helpers.py           # MCP helper factories
-│   ├── schemas.py               # Pydantic models & JSON schemas
-│   ├── widgets.py               # Widget metadata & URIs
-│   ├── main.py                  # Server entrypoint
-│   └── services/
-│       └── fidamy_api.py        # Fidamy insurance API client
-└── assets/                       # Built widget bundles (HTML, JS, CSS)
+├── src/quote/
+│   ├── quote.tsx
+│   ├── quote.css
+│   ├── constants.ts
+│   ├── types.ts
+│   ├── utils.ts
+│   └── components/
+├── server/
+│   ├── app.py
+│   ├── handlers.py
+│   ├── main.py
+│   ├── mcp_helpers.py
+│   ├── schemas.py
+│   ├── widgets.py
+│   └── services/fidamy_api.py
+├── assets/
+├── build-all.mts
+└── package.json
 ```
-
-## Frontend Structure
-
-The quote widget is organized into focused, testable modules:
-
-- **types.ts** – Type definitions for all data structures
-- **utils.ts** – Reusable utilities including `buildCapturePrompt` for generating AI prompts
-- **constants.ts** – Mock quotation data and default states
-- **components/** – UI components:
-  - `PlanOptionCard` – Individual plan option button
-  - `SelectionSummary` – Display of selected plan
-  - `LoadingState` – Loading indicator
-  - `EmptyState` – No plans available message
-  - `BillingPeriodSection` – Groups plans by billing cycle
-  - `QuoteResults` – Main results container
 
 ## Prerequisites
 
 - Node.js 18+
-- pnpm (recommended) or npm/yarn
+- pnpm
 - Python 3.10+
-- A Fidamy API key (for production use)
+- Fidamy API credentials in `server/.env`
 
-## Installation
+## Install
 
-### Frontend
+Install frontend dependencies:
 
 ```bash
 pnpm install
 ```
 
-### Backend
+Create the server virtual environment:
 
 ```bash
 cd server
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cd ..
 ```
 
-## Building
+## Build And Run Locally
 
-### Build the widget bundle
+Build the widget assets:
 
 ```bash
-pnpm run build
+pnpm build
 ```
 
-Outputs hashed bundles to `assets/` for production deployment.
-
-### Development mode
+Serve the generated widget files on port `4444`:
 
 ```bash
-pnpm run dev
+pnpm serve
 ```
 
-Launches Vite dev server on `http://localhost:5173`.
-
-## Running
-
-### Start the backend server
+In another terminal, start the MCP server:
 
 ```bash
-source server/.venv/bin/activate
-python server/main.py
+./server/.venv/bin/uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Or with live reload via Uvicorn:
+The MCP endpoint is:
+
+```text
+http://localhost:8000/mcp
+```
+
+The generated `assets/quote.html` loads JS/CSS from `http://localhost:4444` by default. For hosted deployments, build with:
 
 ```bash
-uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
+BASE_URL=https://your-static-assets-host.example pnpm build
 ```
 
-The server will be available at `http://127.0.0.1:8000`.
+## MCP Inspector
 
-### Important: DNS Rebinding Protection
+Start the server, then run:
 
-The Python MCP SDK enforces DNS rebinding protection. When tunneling (e.g., with ngrok), set these environment variables **before** starting the server:
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+Use:
+
+```text
+Transport: Streamable HTTP
+URL: http://localhost:8000/mcp
+```
+
+You should see:
+
+- Tool: `quote`
+- Tool: `capture-applicant-values`
+- Resource: `ui://widget/quote.html`
+
+Example `quote` input:
+
+```json
+{
+  "deviceCategory": "Smartphone",
+  "deviceMarketValue": 1299
+}
+```
+
+The Inspector can list/read resources and call tools, but it does not render the full ChatGPT App UI exactly like ChatGPT.
+
+## ChatGPT Connector Setup
+
+For ChatGPT to reach a local server, expose port `8000` with a tunnel such as ngrok:
+
+```bash
+ngrok http 8000
+```
+
+Before starting the Python server, allow the tunnel host for MCP DNS rebinding protection:
 
 ```bash
 export MCP_ALLOWED_HOSTS="<custom_endpoint>.ngrok-free.app"
 export MCP_ALLOWED_ORIGINS="https://<custom_endpoint>.ngrok-free.app"
 ```
 
-## Integration with ChatGPT
+Then add the connector in ChatGPT with:
 
-1. Enable [developer mode](https://platform.openai.com/docs/guides/developer-mode) in ChatGPT
-2. Go to Settings > Connectors and add your app
-3. For local development, use [ngrok](https://ngrok.com/):
-   ```bash
-   ngrok http 8000
-   ```
-4. Add the connector URL: `https://<custom_endpoint>.ngrok-free.app/mcp`
+```text
+https://<custom_endpoint>.ngrok-free.app/mcp
+```
 
-## Server Tools
+## Tools
 
-The MCP server exposes two main tools:
+### `quote`
 
-- **`get-quote`** – Fetches insurance quotation options from Fidamy API based on device details
-- **`capture-applicant-values`** – Collects and validates user information for purchase intent
+Input:
 
-## Data Flow
+- `deviceCategory`: one of `Smartphone`, `Laptop`, `Smartwatch`, `Wearable`, or `Camera`
+- `deviceMarketValue`: current market value of the device
 
-1. Widget renders available insurance plans from the quotation data
-2. User selects a plan → triggers `sendFollowUpMessage` with capture prompt
-3. Assistant asks for required applicant information (name, email, phone, address, etc.)
-4. Widget calls `capture-applicant-values` tool with collected data
-5. Server creates a purchase intent and returns checkout URL
-6. User is directed to complete purchase
+Behavior:
 
-## Environment Variables
+- Calls Fidamy’s quotation endpoint
+- Returns structured quotation data for the widget
+- Provides the ChatGPT text response with the device category and value
+- Attaches `openai/outputTemplate` metadata for `ui://widget/quote.html`
 
-The server reads the following (set in `.env` or export):
+### `capture-applicant-values`
 
-- `MCP_ALLOWED_HOSTS` – Comma-separated hosts for DNS rebinding protection
-- `MCP_ALLOWED_ORIGINS` – Comma-separated origins for DNS rebinding protection
-- Fidamy API credentials (as needed for your environment)
+Input:
 
-## Development Notes
+- Applicant identity and contact details
+- Address
+- Device brand/model and serial number or IMEI
+- Selected plan details
 
-- The quote module uses local state management via `useWidgetState` hook
-- All formatting logic is centralized in `utils.ts` for consistency
-- Mock data in `constants.ts` enables offline development
-- Components are isolated and can be tested independently
+Behavior:
 
-## Next Steps
+- Calls Fidamy’s intent endpoint
+- Returns a checkout URL for the selected package
 
-1. **Integrate with real data:** Update `handlers.py` to call your actual quote engine or API
-2. **Add authentication:** Implement OAuth or API key validation in the server
-3. **Customize styling:** Modify `quote.css` and component templates
-4. **Deploy:** Host the server on AWS, Azure, GCP, or your preferred platform
+## User Flow
+
+1. User asks for device insurance.
+2. ChatGPT calls `quote`.
+3. The widget renders available monthly/yearly packages.
+4. User expands package rows to inspect details like fall impact damage, screen breakage, theft, pickpocketing, and robbery.
+5. User selects a package.
+6. The widget saves the selection with `window.openai.setWidgetState`.
+7. The widget sends a follow-up message asking whether the user wants to continue purchasing the package.
+8. If the user confirms, ChatGPT collects the required applicant/device details one by one.
+9. ChatGPT calls `capture-applicant-values`.
+10. The server returns a checkout link.
+
+## Notes
+
+- `build-all.mts` currently builds only the `quote` target.
+- `useWidgetState` persists selected plan state through the ChatGPT Apps SDK host, not browser `sessionStorage`.
+- `LoadingState` uses the same compact list-card visual language as the loaded quote cards.
+- The UI palette follows ChatGPT Apps-style light/dark neutral colors with minimal accents.
+
+## Useful Commands
+
+```bash
+pnpm build
+pnpm serve
+pnpm dev
+pnpm tsc
+./server/.venv/bin/uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
+```
 
 ## License
 
