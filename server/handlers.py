@@ -31,6 +31,11 @@ from .widgets import QuoteWidget, tool_invocation_meta
 T = TypeVar("T", bound=BaseModel)
 
 
+def _format_amount(amount: float) -> str:
+    """Format a device value for user-facing quotation text."""
+    return f"€{amount:,.2f}"
+
+
 def _validate_payload(
     model: type[T], arguments: dict[str, Any] | None
 ) -> tuple[T | None, types.ServerResult | None]:
@@ -112,8 +117,9 @@ async def quote_tool_handler(
         widget,
         quotation.model_dump(by_alias=True, mode="json"),
         text=(
-            f"{widget.response_text} "
-            f"Generated a quotation for {quotation.device_category}."
+            "Here are the insurance options for your "
+            f"{quotation.device_category.lower()} "
+            f"({_format_amount(quotation.device_market_value)})."
         ),
         meta=tool_invocation_meta(widget),
     )
