@@ -7,13 +7,11 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-try:
-    if __package__ and "." in __package__:
-        from ..schemas import ApplicantCaptureRequest, QuotationRequest, QuotationResponse
-    else:
-        from schemas import ApplicantCaptureRequest, QuotationRequest, QuotationResponse
-except ImportError:
-    from schemas import ApplicantCaptureRequest, QuotationRequest, QuotationResponse
+from ..schemas import (
+    ApplicantCaptureRequest,
+    QuotationRequest,
+    QuotationResponse,
+)
 
 
 class FidamyApiError(Exception):
@@ -59,6 +57,12 @@ class FidamyApiClient:
         self._timeout = timeout_seconds
 
     async def quotation(self, payload: QuotationRequest) -> QuotationResponse:
+        """Request a price quotation from the Fidamy API.
+
+        The payload is validated by the caller as a `QuotationRequest` model.
+        This method posts the normalized quotation payload and returns a
+        `QuotationResponse` model representing the normalized response.
+        """
         response_payload = await self._request(
             "POST",
             self._quotation_path,
@@ -67,6 +71,11 @@ class FidamyApiClient:
         return self._parse_quotation_response(payload, response_payload)
 
     async def create_intent(self, payload: ApplicantCaptureRequest) -> dict[str, Any]:
+        """Create a purchase intent in the Fidamy system.
+
+        The returned dictionary contains the raw API response payload. This is
+        used by the server to build a capture result containing the intent URL.
+        """
         response_payload = await self._request(
             "POST",
             self._intent_path,
@@ -75,6 +84,7 @@ class FidamyApiClient:
         return response_payload
 
     def _headers(self) -> dict[str, str]:
+        """Build the standard Fidamy API request headers."""
         return {
             "Accept": "application/json",
             "Authorization": f"ApiKey {self._api_key}",
@@ -82,6 +92,11 @@ class FidamyApiClient:
         }
 
     def _quotation_payload(self, payload: QuotationRequest) -> dict[str, Any]:
+        """Build the payload for a quotation request.
+
+        Converts the normalized Pydantic model into the JSON shape expected by
+        the Fidamy endpoint, including attribution and campaign metadata.
+        """
         request_payload = payload.model_dump(by_alias=True, mode="json")
         request_payload["deviceMarketValue"] = str(request_payload["deviceMarketValue"])
         request_payload["attributionCode"] = self._attribution_code
@@ -89,6 +104,11 @@ class FidamyApiClient:
         return request_payload
 
     def _intent_payload(self, payload: ApplicantCaptureRequest) -> dict[str, Any]:
+        """Build the payload for an intent creation request.
+
+        This payload formats the applicant data and selected plan data into the
+        Fidamy journey format expected by the `/intents` endpoint.
+        """
         coverage = "extended"
         if payload.selected_plan_label.strip().lower().startswith("basic"):
             coverage = "basic"
@@ -136,6 +156,7 @@ class FidamyApiClient:
         *,
         json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Send an HTTP request to the Fidamy API and normalize failures."""
         url = f"{self._base_url}{path}"
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -181,6 +202,7 @@ class FidamyApiClient:
         request_payload: QuotationRequest,
         response_payload: dict[str, Any],
     ) -> QuotationResponse:
+        """Normalize the Fidamy response into a `QuotationResponse` model."""
         try:
             return QuotationResponse.model_validate(
                 {
@@ -196,10 +218,12 @@ class FidamyApiClient:
 
     @staticmethod
     def _response_text(response: httpx.Response) -> str:
+        """Extract and normalize response body text for error reporting."""
         text = response.text.strip()
         return text or "No response body provided."
 
     @staticmethod
     def _format_birthday(date_of_birth: str) -> str:
+        """Convert dd-mm-yyyy birthdate strings into yyyy-mm-dd."""
         day, month, year = date_of_birth.split("-")
         return f"{year}-{month}-{day}"
