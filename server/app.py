@@ -8,73 +8,31 @@ from pathlib import Path
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from dotenv import load_dotenv
-from pydantic import AnyUrl, ValidationError
 
-try:
-    if __package__:
-        from .schemas import (
-            APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA,
-            ApplicantCaptureRequest,
-            QUOTATION_TOOL_INPUT_SCHEMA,
-            QuotationRequest,
-            QuotationResponse,
-        )
-    else:
-        from schemas import (
-            APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA,
-            ApplicantCaptureRequest,
-            QUOTATION_TOOL_INPUT_SCHEMA,
-            QuotationRequest,
-            QuotationResponse,
-        )
-except ImportError:
-    from schemas import (
-        APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA,
-        ApplicantCaptureRequest,
-        QUOTATION_TOOL_INPUT_SCHEMA,
-        QuotationRequest,
-        QuotationResponse,
-    )
-
-try:
-    from .services.fidamy_api import (
-        FidamyApiAuthError,
-        FidamyApiClient,
-        FidamyApiParseError,
-        FidamyApiResponseError,
-        FidamyApiTimeoutError,
-    )
-    from .widgets import (
-        MIME_TYPE,
-        WIDGETS,
-        WIDGETS_BY_ID,
-        WIDGETS_BY_URI,
-        QuoteWidget,
-        resource_description,
-        tool_invocation_meta,
-        tool_meta,
-    )
-except ImportError:
-    from services.fidamy_api import (
-        FidamyApiAuthError,
-        FidamyApiClient,
-        FidamyApiParseError,
-        FidamyApiResponseError,
-        FidamyApiTimeoutError,
-    )
-    from widgets import (
-        MIME_TYPE,
-        WIDGETS,
-        WIDGETS_BY_ID,
-        WIDGETS_BY_URI,
-        QuoteWidget,
-        resource_description,
-        tool_invocation_meta,
-        tool_meta,
-    )
+from .handlers import capture_tool_handler, quote_tool_handler
+from .mcp_helpers import (
+    build_resource,
+    build_resource_template,
+    build_tool,
+    build_transport_security_settings,
+    make_call_tool_handler,
+    make_read_resource_handler,
+)
+from .schemas import (
+    APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA,
+    QUOTATION_TOOL_INPUT_SCHEMA,
+)
+from .services.fidamy_api import FidamyApiClient
+from .widgets import (
+    MIME_TYPE,
+    WIDGETS,
+    WIDGETS_BY_ID,
+    WIDGETS_BY_URI,
+    resource_description,
+    tool_meta,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -106,28 +64,10 @@ fidamy_client = FidamyApiClient(
 )
 
 
-def _split_env_list(value: str | None) -> list[str]:
-    if not value:
-        return []
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-def _transport_security_settings() -> TransportSecuritySettings:
-    allowed_hosts = _split_env_list(os.getenv("MCP_ALLOWED_HOSTS"))
-    allowed_origins = _split_env_list(os.getenv("MCP_ALLOWED_ORIGINS"))
-    if not allowed_hosts and not allowed_origins:
-        return TransportSecuritySettings(enable_dns_rebinding_protection=False)
-    return TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=allowed_hosts,
-        allowed_origins=allowed_origins,
-    )
-
-
 mcp = FastMCP(
     name="quote-server",
     stateless_http=True,
-    transport_security=_transport_security_settings(),
+    transport_security=build_transport_security_settings(),
 )
 
 CAPTURE_TOOL_NAME = "capture-applicant-values"
@@ -136,27 +76,27 @@ CAPTURE_TOOL_TITLE = "Capture applicant values"
 
 @mcp._mcp_server.list_tools()
 async def _list_tools() -> list[types.Tool]:
-    tools = [
-        types.Tool(
+    return [
+        build_tool(
             name="quote",
             title=WIDGETS_BY_ID["quote"].title,
             description=WIDGETS_BY_ID["quote"].title,
-            inputSchema=deepcopy(QUOTATION_TOOL_INPUT_SCHEMA),
-            _meta=tool_meta(WIDGETS_BY_ID["quote"]),
+            input_schema=deepcopy(QUOTATION_TOOL_INPUT_SCHEMA),
+            meta=tool_meta(WIDGETS_BY_ID["quote"]),
             annotations=ToolAnnotations(
                 destructiveHint=False,
                 openWorldHint=False,
                 readOnlyHint=True,
             ),
         ),
-        types.Tool(
+        build_tool(
             name=CAPTURE_TOOL_NAME,
             title=CAPTURE_TOOL_TITLE,
             description=(
                 "Capture applicant personal details, address, device identifiers, "
                 "and selected plan details for the next application step."
             ),
-            inputSchema=deepcopy(APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA),
+            input_schema=deepcopy(APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA),
             annotations=ToolAnnotations(
                 destructiveHint=False,
                 openWorldHint=False,
@@ -164,20 +104,12 @@ async def _list_tools() -> list[types.Tool]:
             ),
         ),
     ]
-    return tools
 
 
 @mcp._mcp_server.list_resources()
 async def _list_resources() -> list[types.Resource]:
     return [
-        types.Resource(
-            name=widget.title,
-            title=widget.title,
-            uri=AnyUrl(widget.template_uri),
-            description=resource_description(widget),
-            mimeType=MIME_TYPE,
-            _meta=tool_meta(widget),
-        )
+        build_resource(widget, MIME_TYPE, resource_description, tool_meta)
         for widget in WIDGETS
     ]
 
@@ -185,217 +117,41 @@ async def _list_resources() -> list[types.Resource]:
 @mcp._mcp_server.list_resource_templates()
 async def _list_resource_templates() -> list[types.ResourceTemplate]:
     return [
-        types.ResourceTemplate(
-            name=widget.title,
-            title=widget.title,
-            uriTemplate=widget.template_uri,
-            description=resource_description(widget),
-            mimeType=MIME_TYPE,
-            _meta=tool_meta(widget),
-        )
+        build_resource_template(widget, MIME_TYPE, resource_description, tool_meta)
         for widget in WIDGETS
     ]
 
 
+_read_resource_handler = make_read_resource_handler(
+    WIDGETS_BY_URI,
+    MIME_TYPE,
+    tool_meta,
+    fallback_widget=WIDGETS_BY_ID.get("quote"),
+)
+
+
 async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerResult:
-    widget = WIDGETS_BY_URI.get(str(req.params.uri))
-    if widget is None and str(req.params.uri).startswith("ui://widget/"):
-        # Compatibility fallback: serve the primary quote widget for stale/cached
-        # widget URIs that may still be referenced by older tool metadata.
-        widget = WIDGETS_BY_ID.get("quote")
-    if widget is None:
-        return types.ServerResult(
-            types.ReadResourceResult(
-                contents=[],
-                _meta={"error": f"Unknown resource: {req.params.uri}"},
-            )
-        )
+    return await _read_resource_handler(req)
 
-    contents = [
-        types.TextResourceContents(
-            uri=AnyUrl(widget.template_uri),
-            mimeType=MIME_TYPE,
-            text=widget.html,
-            _meta=tool_meta(widget),
-        )
-    ]
 
-    return types.ServerResult(types.ReadResourceResult(contents=contents))
+async def _handle_capture_tool(req: types.CallToolRequest) -> types.ServerResult:
+    return await capture_tool_handler(req, fidamy_client)
+
+
+async def _handle_quote_tool(req: types.CallToolRequest) -> types.ServerResult:
+    return await quote_tool_handler(req, WIDGETS_BY_ID["quote"], fidamy_client)
+
+
+_call_tool_handler = make_call_tool_handler(
+    {
+        CAPTURE_TOOL_NAME: _handle_capture_tool,
+        WIDGETS_BY_ID["quote"].identifier: _handle_quote_tool,
+    }
+)
 
 
 async def _call_tool_request(req: types.CallToolRequest) -> types.ServerResult:
-    arguments = req.params.arguments or {}
-
-    if req.params.name == CAPTURE_TOOL_NAME:
-        try:
-            capture_payload = ApplicantCaptureRequest.model_validate(arguments)
-        except ValidationError as exc:
-            return types.ServerResult(
-                types.CallToolResult(
-                    content=[
-                        types.TextContent(
-                            type="text",
-                            text=f"Input validation error: {exc.errors()}",
-                        )
-                    ],
-                    isError=True,
-                )
-            )
-        try:
-            intent_response = await fidamy_client.create_intent(capture_payload)
-        except FidamyApiAuthError as exc:
-            return types.ServerResult(
-                types.CallToolResult(
-                    content=[
-                        types.TextContent(
-                            type="text",
-                            text=f"Authentication error while creating intent: {exc}",
-                        )
-                    ],
-                    isError=True,
-                )
-            )
-        except FidamyApiTimeoutError as exc:
-            return types.ServerResult(
-                types.CallToolResult(
-                    content=[
-                        types.TextContent(
-                            type="text",
-                            text=f"Intent request timed out: {exc}",
-                        )
-                    ],
-                    isError=True,
-                )
-            )
-        except (FidamyApiParseError, FidamyApiResponseError) as exc:
-            return types.ServerResult(
-                types.CallToolResult(
-                    content=[
-                        types.TextContent(
-                            type="text",
-                            text=f"Unable to create intent: {exc}",
-                        )
-                    ],
-                    isError=True,
-                )
-            )
-        return _capture_values_result(capture_payload, intent_response)
-
-    widget = WIDGETS_BY_ID.get(req.params.name)
-    if widget is None:
-        return types.ServerResult(
-            types.CallToolResult(
-                content=[
-                    types.TextContent(
-                        type="text",
-                        text=f"Unknown tool: {req.params.name}",
-                    )
-                ],
-                isError=True,
-            )
-        )
-
-    try:
-        payload = QuotationRequest.model_validate(arguments)
-    except ValidationError as exc:
-        return types.ServerResult(
-            types.CallToolResult(
-                content=[
-                    types.TextContent(
-                        type="text",
-                        text=f"Input validation error: {exc.errors()}",
-                    )
-                ],
-                isError=True,
-            )
-        )
-
-    try:
-        quotation = await fidamy_client.quotation(payload)
-    except FidamyApiAuthError as exc:
-        return _tool_error_result(widget, f"Authentication error: {exc}")
-    except FidamyApiTimeoutError as exc:
-        return _tool_error_result(widget, f"Quotation request timed out: {exc}")
-    except (FidamyApiParseError, FidamyApiResponseError) as exc:
-        return _tool_error_result(widget, f"Unable to fetch quotation: {exc}")
-
-    return _tool_result(widget, quotation)
-
-
-def _tool_result(
-    widget: QuoteWidget, quotation: QuotationResponse
-) -> types.ServerResult:
-    return types.ServerResult(
-        types.CallToolResult(
-            content=[
-                types.TextContent(
-                    type="text",
-                    text=(
-                        f"{widget.response_text} "
-                        f"Generated a quotation for {quotation.device_category}."
-                    ),
-                )
-            ],
-            structuredContent=quotation.model_dump(by_alias=True, mode="json"),
-            _meta=tool_invocation_meta(widget),
-        )
-    )
-
-
-def _tool_error_result(widget: QuoteWidget, message: str) -> types.ServerResult:
-    return types.ServerResult(
-        types.CallToolResult(
-            content=[types.TextContent(type="text", text=message)],
-            _meta=tool_invocation_meta(widget),
-            isError=True,
-        )
-    )
-
-
-def _capture_values_result(
-    payload: ApplicantCaptureRequest,
-    intent_response: dict[str, object],
-) -> types.ServerResult:
-    intent_url = str(intent_response.get("url", "")).strip()
-    device_id = payload.serial_number or payload.imei or "-"
-    device_id_type = "serialNumber" if payload.serial_number else "imei"
-
-    if intent_url:
-        user_text = (
-            "Your insurance is waiting for you. Please complete your purchase here:\n\n"
-            f"[Get your insurance]({intent_url})\n"
-            f"{intent_url}\n\n"
-            "On the distribution flow you will confirm a few details and provide your payment information. "
-            "The link is valid for 24 hours."
-        )
-    else:
-        user_text = (
-            "Captured applicant profile for "
-            f"{payload.first_name} {payload.last_name}. "
-            f"Contact: {payload.email}, {payload.phone_number}. "
-            f"DOB: {payload.date_of_birth}. "
-            f"Address: {payload.street} {payload.house_number}, "
-            f"{payload.zip_code} {payload.city}, {payload.country_of_residence}. "
-            f"Device: {payload.device_brand} ({device_id_type}: {device_id}). "
-            f"Plan: {payload.selected_plan_label} {payload.selected_billing_period} "
-            f"at {payload.selected_premium}. "
-            "Intent request sent to Fidamy."
-        )
-    return types.ServerResult(
-        types.CallToolResult(
-            content=[
-                types.TextContent(
-                    type="text",
-                    text=user_text,
-                )
-            ],
-            structuredContent={
-                "url": intent_url,
-                "intent": intent_response,
-                "intentUrl": intent_url,
-            },
-        )
-    )
+    return await _call_tool_handler(req)
 
 
 mcp._mcp_server.request_handlers[types.CallToolRequest] = _call_tool_request
