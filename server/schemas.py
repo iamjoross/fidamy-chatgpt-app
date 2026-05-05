@@ -245,7 +245,9 @@ class ApplicantCaptureRequest(BaseModel):
         try:
             parsed = datetime.strptime(value, "%d-%m-%Y").date()
         except ValueError as exc:
-            raise ValueError("dateOfBirth must be a valid date in dd-mm-yyyy format.") from exc
+            raise ValueError(
+                "dateOfBirth must be a valid date in dd-mm-yyyy format."
+            ) from exc
         if parsed >= date.today():
             raise ValueError("dateOfBirth must be in the past.")
         return value
@@ -382,12 +384,12 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         "serialNumber": {
             "type": "string",
             "minLength": 5,
-            "description": "Device serial number.",
+            "description": "Device serial number. Provide either serialNumber or imei.",
         },
         "imei": {
             "type": "string",
             "pattern": "^\\d{15}$",
-            "description": "Device IMEI number.",
+            "description": "Device IMEI number. Provide either imei or serialNumber.",
         },
         "selectedPlanLabel": {
             "type": "string",
@@ -423,10 +425,6 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         "selectedPlanLabel",
         "selectedBillingPeriod",
         "selectedPremium",
-    ],
-    "anyOf": [
-        {"required": ["serialNumber"]},
-        {"required": ["imei"]},
     ],
     "additionalProperties": False,
 }
