@@ -153,7 +153,7 @@
 }
 
 .quote-intent-cta {
-  margin: 10px 14px 8px;
+  margin: 10px 0 0;
   padding: 10px;
   border: 1px solid var(--fidamy-border);
   border-radius: 4px;
@@ -284,7 +284,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 10px 14px 8px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 12px 0 0;
   padding: 10px 12px;
   border: 1px solid var(--fidamy-border);
   border-radius: 4px;
@@ -764,7 +766,7 @@
   }
 
   .quote-selection-summary {
-    margin: 12px 14px 10px;
+    margin: 12px 0 0;
     padding: 10px 12px;
     flex-direction: column;
     align-items: flex-start;

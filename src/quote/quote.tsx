@@ -115,14 +115,6 @@ export function App() {
 
   return (
     <div className="quote-widget-shell">
-      {!isLoading && selectedPlanId ? (
-        <SelectionSummary
-          isAwaitingFirstName={isAwaitingFirstName}
-          onChoosePlan={handleChoosePlan}
-          selection={selection}
-        />
-      ) : null}
-
       {isLoading ? (
         <LoadingState />
       ) : !hasPlans ? (
@@ -135,6 +127,14 @@ export function App() {
           selectedId={selectedPlanId}
         />
       )}
+
+      {!isLoading && selectedPlanId ? (
+        <SelectionSummary
+          isAwaitingFirstName={isAwaitingFirstName}
+          onChoosePlan={handleChoosePlan}
+          selection={selection}
+        />
+      ) : null}
     </div>
   );
 }
