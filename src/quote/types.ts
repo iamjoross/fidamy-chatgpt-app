@@ -1,5 +1,5 @@
 export type BillingPeriod = "monthly" | "yearly";
-export type CaptureStep = "idle" | "awaiting_first_name";
+export type CaptureStep = "idle" | "awaiting_purchase_confirmation";
 
 export type Labels = {
   en?: string;

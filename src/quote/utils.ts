@@ -37,7 +37,7 @@ export function buildCapturePrompt(selection: CapturePromptInput): string {
     "The user selected the " +
     `${selection.selectedPlanLabel} ${selection.selectedBillingPeriod} ` +
     `plan at ${formatAmount(selection.selectedPremium)}. ` +
-    "Please collect the required details one by one, asking only one question per assistant message and waiting for the user's answer before asking the next field. " +
+    "Ask the user if they want to continue to purchase this package. If they say yes, collect the required details one by one, asking only one question per assistant message and waiting for the user's answer before asking the next field. If they say no or seem unsure, do not collect details and offer to help them compare the available packages. " +
     "Use soft-rotation phrasing for questions: rotate among a small set of polite openings and avoid repeating the exact same opening pattern in consecutive turns. " +
     "Examples of acceptable openings to rotate: 'Could you share ...', 'May I have ...', 'Please provide ...', 'What is ...'. " +
     "Validate each value immediately after the user provides it. If a value is invalid, explain briefly what is wrong and ask for the same field again; do not continue to the next field until valid. " +

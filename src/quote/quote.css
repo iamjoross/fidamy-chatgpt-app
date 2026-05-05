@@ -352,40 +352,6 @@ body {
   color: var(--fidamy-accent);
 }
 
-.quote-proceed-button {
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 10px 16px;
-  background: var(--fidamy-button-bg);
-  color: var(--fidamy-button-text);
-  font-size: 0.86rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    transform 120ms ease,
-    box-shadow 120ms ease,
-    filter 120ms ease;
-  box-shadow: 0 5px 14px var(--fidamy-shadow-strong);
-}
-
-.quote-proceed-button:disabled {
-  cursor: wait;
-  opacity: 0.7;
-  transform: none;
-  filter: none;
-  box-shadow: none;
-}
-
-.quote-proceed-button:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.03);
-}
-
-.quote-proceed-button:focus-visible {
-  outline: 2px solid var(--fidamy-accent);
-  outline-offset: 2px;
-}
-
 .quote-followup-state {
   display: inline-flex;
   align-items: center;

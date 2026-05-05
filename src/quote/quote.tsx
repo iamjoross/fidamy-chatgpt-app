@@ -71,23 +71,17 @@ export function App() {
       : rawToolOutput == null;
   const hasPlans = monthlyPlans.length > 0 || yearlyPlans.length > 0;
   const selectedPlanId = selection.selectedPlanId;
-  const isAwaitingFirstName = selection.captureStep === "awaiting_first_name";
 
-  const handleSelectPlan = (nextSelection: PlanSelection) => {
-    setSelection({
+  const handleSelectPlan = async (nextSelection: PlanSelection) => {
+    const nextState: SelectionState = {
       selectedPlanId: nextSelection.id,
       selectedPlanLabel: nextSelection.label,
       selectedBillingPeriod: nextSelection.billingPeriod,
       selectedPremium: nextSelection.totalPremium,
-      captureStep: "idle",
-    });
-  };
+      captureStep: "awaiting_purchase_confirmation",
+    };
 
-  const handleChoosePlan = async () => {
-    if (!selection.selectedPlanId) {
-      return;
-    }
-
+    setSelection(nextState);
     if (!window.openai?.sendFollowUpMessage) {
       console.error("sendFollowUpMessage is not available in this context.");
       return;
@@ -96,18 +90,14 @@ export function App() {
     try {
       await window.openai.sendFollowUpMessage({
         prompt: buildCapturePrompt({
-          ...selection,
+          ...nextState,
           deviceCategory,
           deviceMarketValue,
         }),
       });
-      setSelection((prevState) => ({
-        ...(prevState ?? DEFAULT_SELECTION_STATE),
-        captureStep: "awaiting_first_name",
-      }));
     } catch (error) {
       console.error(
-        "Failed to continue conversation after plan selection:",
+        "Failed to ask for purchase confirmation after plan selection:",
         error,
       );
     }
@@ -130,8 +120,6 @@ export function App() {
 
       {!isLoading && selectedPlanId ? (
         <SelectionSummary
-          isAwaitingFirstName={isAwaitingFirstName}
-          onChoosePlan={handleChoosePlan}
           selection={selection}
         />
       ) : null}
