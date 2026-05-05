@@ -227,66 +227,30 @@ body {
 
 .quote-loading-state {
   display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 12px;
-  border: 1px solid var(--fidamy-border);
-  border-radius: 4px;
-  background: var(--fidamy-surface-soft);
-}
-
-.quote-loading-copy h2,
-.quote-loading-copy p {
-  margin: 0;
-}
-
-.quote-loading-copy h2 {
-  margin-top: 8px;
-  font-size: 1rem;
-}
-
-.quote-loading-copy p {
-  margin-top: 4px;
-  font-size: 0.9rem;
-  color: var(--fidamy-text-soft);
-}
-
-.quote-loading-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--fidamy-accent);
-  font-size: 0.73rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.quote-progress {
-  position: relative;
-  height: 7px;
   overflow: hidden;
-  border-radius: 999px;
-  background: var(--fidamy-surface-soft);
-}
-
-.quote-progress-bar {
-  width: 45%;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--fidamy-accent);
-  animation: quote-progress-slide 1.4s ease-in-out infinite;
-}
-
-.quote-loading-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.quote-loading-card {
-  height: 78px;
-  border-radius: 4px;
+  gap: 0;
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--fidamy-border);
+  border-radius: 8px;
+  background: var(--fidamy-surface);
+}
+
+.quote-loading-list {
+  display: grid;
+  gap: 0;
+}
+
+.quote-loading-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--fidamy-border);
+}
+
+.quote-loading-icon,
+.quote-loading-line {
   background: linear-gradient(
     90deg,
     rgb(143 143 143 / 8%) 20%,
@@ -295,6 +259,35 @@ body {
   );
   background-size: 200% 100%;
   animation: quote-shimmer 1.5s linear infinite;
+}
+
+.quote-loading-icon {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--fidamy-border);
+  border-radius: 6px;
+}
+
+.quote-loading-lines {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.quote-loading-line {
+  height: 9px;
+  border-radius: 999px;
+}
+
+.quote-loading-line.is-title {
+  width: min(170px, 58%);
+  height: 11px;
+}
+
+.quote-loading-line.is-price {
+  width: min(110px, 36%);
 }
 
 .quote-selection-summary {
@@ -745,8 +738,8 @@ body {
   }
 
   .quote-loading-state {
-    margin: 0px;
-    padding: 12px;
+    margin: 0;
+    padding: 0;
   }
 
   .quote-selection-summary {
@@ -763,16 +756,6 @@ body {
 
   .quote-empty-state {
     margin: 12px 14px 14px;
-  }
-}
-
-@keyframes quote-progress-slide {
-  0% {
-    transform: translateX(-110%);
-  }
-
-  100% {
-    transform: translateX(260%);
   }
 }
 

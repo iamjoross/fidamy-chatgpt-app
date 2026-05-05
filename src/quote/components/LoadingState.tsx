@@ -1,29 +1,38 @@
-import { Shield } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
 export function LoadingState() {
   return (
     <section className="quote-loading-state">
-      <div className="quote-loading-copy">
-        <div className="quote-loading-badge">
-          <Shield size={18} strokeWidth={1.8} />
-          Fetching live quote
+      <div className="quote-group-header">
+        <div className="quote-group-icon">
+          <ShieldCheck size={16} strokeWidth={1.8} />
         </div>
-        <h2>Checking available coverage options.</h2>
-        <p>This usually takes a moment.</p>
+        <div>
+          <h2>Checking available coverage</h2>
+        </div>
       </div>
       <div
         aria-busy="true"
         aria-label="Loading quotation"
-        aria-valuemax={100}
-        aria-valuemin={0}
-        className="quote-progress"
-        role="progressbar"
+        className="quote-loading-list"
+        role="status"
       >
-        <div className="quote-progress-bar" />
-      </div>
-      <div aria-hidden="true" className="quote-loading-grid">
-        <div className="quote-loading-card" />
-        <div className="quote-loading-card" />
+        <div className="quote-loading-row">
+          <div className="quote-loading-icon" />
+          <div className="quote-loading-lines">
+            <div className="quote-loading-line is-title" />
+            <div className="quote-loading-line is-price" />
+            <div className="quote-loading-line" />
+          </div>
+        </div>
+        <div className="quote-loading-row">
+          <div className="quote-loading-icon" />
+          <div className="quote-loading-lines">
+            <div className="quote-loading-line is-title" />
+            <div className="quote-loading-line is-price" />
+            <div className="quote-loading-line" />
+          </div>
+        </div>
       </div>
     </section>
   );
