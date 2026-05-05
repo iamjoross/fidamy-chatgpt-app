@@ -14,25 +14,13 @@ const PER_ENTRY_CSS_GLOB = "**/*.{css,pcss,scss,sass}";
 const PER_ENTRY_CSS_IGNORE = "**/*.module.*".split(",").map((s) => s.trim());
 const GLOBAL_CSS_LIST = [path.resolve("src/index.css")];
 
-const targets: string[] = [
-  "quote",
-  "solar-system",
-  "pizzaz",
-  "pizzaz-carousel",
-  "pizzaz-list",
-  "pizzaz-albums",
-  "pizzaz-shop",
-  "mixed-auth-search",
-  "mixed-auth-past-orders",
-  "kitchen-sink-lite",
-  "shopping-cart",
-];
+const targets: string[] = ["quote"];
 const builtNames: string[] = [];
 
 function wrapEntryPlugin(
   virtualId: string,
   entryFile: string,
-  cssPaths: string[]
+  cssPaths: string[],
 ): Plugin {
   return {
     name: `virtual-entry-wrapper:${entryFile}`,
@@ -85,7 +73,7 @@ for (const file of entries) {
 
   // Final CSS list (global first for predictable cascade)
   const cssToInclude = [...globalCss, ...perEntryCss].filter((p) =>
-    fs.existsSync(p)
+    fs.existsSync(p),
   );
 
   const virtualId = `\0virtual-entry:${entryAbs}`;
@@ -165,11 +153,10 @@ for (const out of outputs) {
 }
 console.groupEnd();
 
-console.log("new hash: ", h);
-
 const defaultBaseUrl = "http://localhost:4444";
 const baseUrlCandidate = process.env.BASE_URL?.trim() ?? "";
-const baseUrlRaw = baseUrlCandidate.length > 0 ? baseUrlCandidate : defaultBaseUrl;
+const baseUrlRaw =
+  baseUrlCandidate.length > 0 ? baseUrlCandidate : defaultBaseUrl;
 const normalizedBaseUrl = baseUrlRaw.replace(/\/+$/, "") || defaultBaseUrl;
 console.log(`Using BASE_URL ${normalizedBaseUrl} for generated HTML`);
 
