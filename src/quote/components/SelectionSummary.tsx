@@ -15,9 +15,7 @@ export function SelectionSummary({
         <strong>
           {selection.selectedPlanLabel} {selection.selectedBillingPeriod} plan
         </strong>
-        <p>
-          Continue in chat to confirm whether you want to purchase this package.
-        </p>
+        <p>Continue in chat and upload your receipt if you have one.</p>
       </div>
       <div className="quote-selection-actions">
         <div className="quote-selection-price">
