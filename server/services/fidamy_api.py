@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -114,7 +115,44 @@ class FidamyApiClient:
             coverage = "basic"
         elif payload.selected_plan_label.strip().lower().startswith("extended"):
             coverage = "extended"
-
+        print(
+            json.dumps(
+                {
+                    "attributionCode": self._attribution_code,
+                    "campaignCode": self._campaign_code,
+                    "journeyType": "express",
+                    "handoffChannel": "url",
+                    "product": {
+                        "coverage": coverage,
+                        "billingCycle": payload.selected_billing_period,
+                    },
+                    "insuredObject": {
+                        "serialNo": payload.serial_number,
+                        "imei": payload.imei,
+                        "deviceBrand": payload.device_brand,
+                        "deviceModel": payload.device_model,
+                        "deviceCategory": payload.device_category,
+                        "deviceMarketValue": payload.device_market_value,
+                    },
+                    "policyholder": {
+                        "firstName": payload.first_name,
+                        "lastName": payload.last_name,
+                        "birthday": self._format_birthday(payload.date_of_birth),
+                        "email": payload.email,
+                        "phoneNo": payload.phone_no,
+                        "phoneCountryCode": payload.phone_country_code,
+                        "address": {
+                            "zipCode": payload.zip_code,
+                            "street": payload.street,
+                            "houseNo": payload.house_number,
+                            "city": payload.city,
+                            "residenceCountry": payload.country_of_residence,
+                        },
+                    },
+                },
+                indent=2,
+            )
+        )
         return {
             "attributionCode": self._attribution_code,
             "campaignCode": self._campaign_code,

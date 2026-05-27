@@ -53,11 +53,3 @@ export type PlanSelection = {
   label: string;
   totalPremium: string | number;
 };
-
-export type CapturePromptInput = {
-  selectedPlanLabel: string;
-  selectedBillingPeriod: string;
-  selectedPremium: string | number;
-  deviceCategory: string;
-  deviceMarketValue: string | number;
-};

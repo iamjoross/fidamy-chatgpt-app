@@ -18,7 +18,7 @@ from .mcp_helpers import (
     build_tool_result,
     build_validation_error_result,
 )
-from .schemas import ApplicantCaptureRequest, QuotationRequest
+from .schemas import ApplicantCaptureRequest, CaptureFlowPromptRequest, QuotationRequest
 from .services.fidamy_api import (
     FidamyApiAuthError,
     FidamyApiClient,
@@ -34,6 +34,14 @@ T = TypeVar("T", bound=BaseModel)
 def _format_amount(amount: float) -> str:
     """Format a device value for user-facing quotation text."""
     return f"€{amount:,.2f}"
+
+
+def _format_prompt_amount(amount: str | float) -> str:
+    """Format prompt amounts while preserving non-numeric text."""
+    try:
+        return _format_amount(float(amount))
+    except (TypeError, ValueError):
+        return str(amount)
 
 
 def _validate_payload(
@@ -80,6 +88,24 @@ async def capture_tool_handler(
     return _capture_values_result(payload, intent_response)
 
 
+async def prepare_capture_flow_handler(req: types.CallToolRequest) -> types.ServerResult:
+    """Prepare the post-selection chat prompt for receipt-assisted capture."""
+    payload, error = _validate_payload(
+        CaptureFlowPromptRequest, req.params.arguments
+    )
+    if error:
+        return error
+    assert payload is not None
+
+    prompt = _build_capture_flow_prompt(payload)
+    return types.ServerResult(
+        types.CallToolResult(
+            content=[types.TextContent(type="text", text=prompt)],
+            structuredContent={"prompt": prompt},
+        )
+    )
+
+
 async def quote_tool_handler(
     req: types.CallToolRequest,
     widget: QuoteWidget,
@@ -122,6 +148,58 @@ async def quote_tool_handler(
             f"({_format_amount(quotation.device_market_value)})."
         ),
         meta=tool_invocation_meta(widget),
+    )
+
+
+def _build_capture_flow_prompt(payload: CaptureFlowPromptRequest) -> str:
+    """Build the receipt OCR follow-up instructions used by the widget."""
+    selected_premium = _format_prompt_amount(payload.selected_premium)
+    quoted_device_value = _format_prompt_amount(payload.device_market_value)
+
+    return (
+        "The user selected the "
+        f"{payload.selected_plan_label} {payload.selected_billing_period} "
+        f"plan at {selected_premium}. "
+        f"The quoted device market value is {quoted_device_value}. "
+        "If receipt OCR data was already extracted and verified earlier in the conversation, do not ask the user for a receipt again and do not restart the data intake flow. "
+        "Use the verified OCR fields as already collected values. "
+        "If all required applicant, address, and device identifier values are already verified, call `capture-applicant-values` immediately with the selected plan details instead of asking more intake questions. "
+        "If only some verified OCR values are missing, ask only for those missing or invalid fields. "
+        "If no receipt OCR data has been verified yet, first ask the user whether they have a receipt for the purchased item. "
+        "If they have a receipt, ask them to upload the receipt image or document in chat before collecting details. "
+        "Use ChatGPT vision/OCR on the uploaded receipt to extract any visible applicant name, email, phone, address, device brand, device model, serial number, IMEI, purchase price/current value, and purchase evidence. "
+        "Normalize zipCode by removing all spaces, and normalize countryOfResidence to a two-letter ISO 3166-1 alpha-2 code, for example Netherlands, Nederland, or The Netherlands -> NL. "
+        "When extracting device brand and model from a receipt product line, separate model information from storage, color, finish, and material descriptors. "
+        "For example, parse 'Apple iPhone 15 Pro Max, 256GB Natural Titanium' as deviceBrand 'Apple' and deviceModel 'iPhone 15 Pro Max'; do not use 'Natural Titanium' as the model. "
+        "After OCR, stop immediately: show all extracted fields you intend to use back to the user in a concise labeled list and ask them to verify that everything is correct or provide corrections. "
+        "Do not ask any additional intake question, call any tool, generate a quote, or treat any OCR value as collected until the user explicitly verifies or corrects the OCR data. "
+        "Do not expose unnecessary raw OCR text. "
+        "If a field is unclear or sensitive and not confidently readable, do not guess; ask the user for that field directly. "
+        "If the receipt purchase price or value differs from the quoted device market value, ask the user to confirm the correct current market value before submitting; do not silently change the selected plan or selected premium. "
+        "If the user does not have a receipt, or if no receipt OCR capture was done at the beginning of the conversation, continue with the original manual data intake flow exactly: collect the required applicant and device details one by one in the order below. "
+        "In all cases, collect only missing or invalid required details one by one, asking only one question per assistant message and waiting for the user's answer before asking the next field. "
+        "If the user seems unsure about buying, do not collect details and offer to help them compare the available packages. "
+        "Use soft-rotation phrasing for questions: rotate among a small set of polite openings and avoid repeating the exact same opening pattern in consecutive turns. "
+        "Examples of acceptable openings to rotate: 'Could you share ...', 'May I have ...', 'Please provide ...', 'What is ...'. "
+        "Validate each value immediately after the user provides it. "
+        "If a value is invalid, explain briefly what is wrong and ask for the same field again; do not continue to the next field until valid. "
+        "Infer deviceBrand from the conversation whenever it is obvious (for example: iPhone -> Apple, Galaxy -> Samsung, Pixel -> Google) and inject that inferred value directly in the final tool arguments. "
+        "Only ask the user for device brand if it cannot be inferred confidently. "
+        "For deviceModel, use the product family and model generation/name only; omit color or finish terms such as Natural Titanium, Black Titanium, Blue, Silver, Graphite, or Gold. "
+        "Validation rules: email must be valid; phone number must be E.164 with country code (example +31612345678); extract phoneCountryCode and phoneNo from the validated phone number; date of birth must be dd-mm-yyyy and in the past; zipCode must contain no spaces; countryOfResidence must be a two-letter ISO 3166-1 alpha-2 code such as NL; IMEI must be 15 digits; serial number must be at least 5 characters; at least one of serialNumber or imei is required. "
+        "Guardrails: do not ask multiple fields in one message, do not skip fields, and do not change any required formats. "
+        "Use this exact order: first name, last name, email, phone number including country code, date of birth (dd-mm-yyyy), street, house number, zip code, city, country of residence, device brand (if not inferable), device model, then either serial number or IMEI. "
+        "When verified OCR or earlier conversation already supplied a confirmed value for a field in that order, skip asking for that field; never re-collect confirmed OCR values after package selection. "
+        "After collecting all values, call the MCP tool "
+        "`capture-applicant-values` with arguments: "
+        "{ firstName, lastName, email, phoneNumber, phoneCountryCode, phoneNo, dateOfBirth, street, houseNumber, "
+        "zipCode, city, countryOfResidence, deviceBrand, deviceModel, serialNumber?, imei?, "
+        f'deviceCategory: "{payload.device_category}", '
+        f'deviceMarketValue: "{payload.device_market_value}", '
+        f'selectedPlanLabel: "{payload.selected_plan_label}", '
+        f'selectedBillingPeriod: "{payload.selected_billing_period}", '
+        f'selectedPremium: "{selected_premium}" }}. '
+        "After the tool returns, respond to the user with the exact checkout URL from the tool response (`url` or `intentUrl`) and do not omit it."
     )
 
 

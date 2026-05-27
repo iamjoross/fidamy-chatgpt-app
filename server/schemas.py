@@ -23,6 +23,25 @@ DeviceCategory = Literal[
     "Camera",
 ]
 
+COUNTRY_OF_RESIDENCE_CODES = {
+    "belgium": "BE",
+    "belgie": "BE",
+    "belgique": "BE",
+    "deutschland": "DE",
+    "france": "FR",
+    "germany": "DE",
+    "holland": "NL",
+    "italy": "IT",
+    "nederland": "NL",
+    "netherlands": "NL",
+    "portugal": "PT",
+    "spain": "ES",
+    "the netherlands": "NL",
+    "united kingdom": "GB",
+    "united states": "US",
+    "united states of america": "US",
+}
+
 
 class QuotationRequest(BaseModel):
     """Validated input for quotation requests."""
@@ -32,13 +51,18 @@ class QuotationRequest(BaseModel):
         alias="deviceCategory",
         description=(
             "Choose the exact supported device category inferred from the user's "
-            "device: Smartphone, Laptop, Smartwatch, Wearable, or Camera."
+            "device or from a user-submitted receipt after OCR: Smartphone, "
+            "Laptop, Smartwatch, Wearable, or Camera."
         ),
     )
     device_market_value: float = Field(
         ...,
         alias="deviceMarketValue",
-        description="The current market value of the device.",
+        description=(
+            "The current market value of the device. If sourced from OCR, use only "
+            "after showing the extracted receipt data to the user and receiving "
+            "explicit verification or corrections."
+        ),
     )
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -55,6 +79,56 @@ class QuotationResponse(BaseModel):
     )
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
+class CaptureFlowPromptRequest(BaseModel):
+    """Validated input for preparing the post-selection capture prompt."""
+
+    selected_plan_label: str = Field(
+        ...,
+        alias="selectedPlanLabel",
+        description="Selected insurance plan label.",
+    )
+    selected_billing_period: Literal["monthly", "yearly"] = Field(
+        ...,
+        alias="selectedBillingPeriod",
+        description="Selected insurance billing period.",
+    )
+    selected_premium: str | float = Field(
+        ...,
+        alias="selectedPremium",
+        description="Selected premium amount.",
+    )
+    device_category: DeviceCategory = Field(
+        ...,
+        alias="deviceCategory",
+        description="Category of the insured device.",
+    )
+    device_market_value: str | float = Field(
+        ...,
+        alias="deviceMarketValue",
+        description="Current market value of the device.",
+    )
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @field_validator("selected_plan_label", mode="before")
+    @classmethod
+    def normalize_selected_plan_label(cls, value: object) -> str:
+        text = str(value).strip() if value is not None else ""
+        if not text:
+            raise ValueError("selectedPlanLabel is required and cannot be empty.")
+        return text
+
+    @field_validator("selected_premium", "device_market_value", mode="before")
+    @classmethod
+    def normalize_amount_values(cls, value: object) -> str | float:
+        if isinstance(value, int | float):
+            return float(value)
+        text = str(value).strip() if value is not None else ""
+        if not text:
+            raise ValueError("Amount values are required and cannot be empty.")
+        return text
 
 
 class ApplicantCaptureRequest(BaseModel):
@@ -109,7 +183,7 @@ class ApplicantCaptureRequest(BaseModel):
     zip_code: str = Field(
         ...,
         alias="zipCode",
-        description="ZIP/postal code of residence address.",
+        description="ZIP/postal code of residence address, without spaces.",
     )
     city: str = Field(
         ...,
@@ -119,7 +193,7 @@ class ApplicantCaptureRequest(BaseModel):
     country_of_residence: str = Field(
         ...,
         alias="countryOfResidence",
-        description="Country of residence.",
+        description="Country of residence as an ISO 3166-1 alpha-2 code (for example NL).",
     )
     device_brand: str = Field(
         ...,
@@ -129,7 +203,10 @@ class ApplicantCaptureRequest(BaseModel):
     device_model: str = Field(
         ...,
         alias="deviceModel",
-        description="Model of the insured device (for example iPhone 17).",
+        description=(
+            "Model of the insured device (for example iPhone 15 Pro Max). Do not "
+            "use color, finish, or material descriptors as the model."
+        ),
     )
     device_category: DeviceCategory = Field(
         ...,
@@ -239,6 +316,19 @@ class ApplicantCaptureRequest(BaseModel):
             raise ValueError("phoneNo must contain at least 4 digits.")
         return value
 
+    @field_validator("zip_code")
+    @classmethod
+    def normalize_zip_code(cls, value: str) -> str:
+        return "".join(value.split()).upper()
+
+    @field_validator("country_of_residence")
+    @classmethod
+    def normalize_country_of_residence(cls, value: str) -> str:
+        text = " ".join(value.strip().split())
+        if len(text) == 2 and text.isalpha():
+            return text.upper()
+        return COUNTRY_OF_RESIDENCE_CODES.get(text.lower(), text)
+
     @field_validator("date_of_birth")
     @classmethod
     def validate_date_of_birth(cls, value: str) -> str:
@@ -296,15 +386,61 @@ QUOTATION_TOOL_INPUT_SCHEMA: dict[str, Any] = {
             "enum": list(DEVICE_CATEGORIES),
             "description": (
                 "Choose the exact supported device category inferred from the user's "
-                "device: Smartphone, Laptop, Smartwatch, Wearable, or Camera."
+                "device or from a user-submitted receipt after OCR: Smartphone, "
+                "Laptop, Smartwatch, Wearable, or Camera."
             ),
         },
         "deviceMarketValue": {
             "type": "number",
-            "description": "The current market value of the device.",
+            "description": (
+                "The current market value of the device. If the conversation begins "
+                "with a receipt, use the OCR-extracted purchase price or visible "
+                "device value only after showing the extracted receipt data to the "
+                "user and receiving explicit confirmation or correction."
+            ),
         },
     },
     "required": ["deviceCategory", "deviceMarketValue"],
+    "additionalProperties": False,
+}
+
+CAPTURE_FLOW_PROMPT_TOOL_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "selectedPlanLabel": {
+            "type": "string",
+            "description": "Selected insurance plan label.",
+        },
+        "selectedBillingPeriod": {
+            "type": "string",
+            "enum": ["monthly", "yearly"],
+            "description": "Selected insurance billing period.",
+        },
+        "selectedPremium": {
+            "type": ["string", "number"],
+            "description": "Selected premium amount.",
+        },
+        "deviceCategory": {
+            "type": "string",
+            "enum": list(DEVICE_CATEGORIES),
+            "description": "Category of the insured device.",
+        },
+        "deviceMarketValue": {
+            "type": ["string", "number"],
+            "description": (
+                "Current market value of the device. If this value came from receipt "
+                "OCR, it must already have been shown back to the user and "
+                "explicitly verified or corrected."
+            ),
+        },
+    },
+    "required": [
+        "selectedPlanLabel",
+        "selectedBillingPeriod",
+        "selectedPremium",
+        "deviceCategory",
+        "deviceMarketValue",
+    ],
     "additionalProperties": False,
 }
 
@@ -354,7 +490,7 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         },
         "zipCode": {
             "type": "string",
-            "description": "ZIP/postal code of residence address.",
+            "description": "ZIP/postal code of residence address, without spaces.",
         },
         "city": {
             "type": "string",
@@ -362,7 +498,7 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         },
         "countryOfResidence": {
             "type": "string",
-            "description": "Country of residence.",
+            "description": "Country of residence as an ISO 3166-1 alpha-2 code (for example NL).",
         },
         "deviceBrand": {
             "type": "string",
@@ -370,7 +506,10 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         },
         "deviceModel": {
             "type": "string",
-            "description": "Model of the insured device (for example iPhone 17).",
+            "description": (
+                "Model of the insured device (for example iPhone 15 Pro Max). Do "
+                "not use color, finish, or material descriptors as the model."
+            ),
         },
         "deviceCategory": {
             "type": "string",
@@ -379,7 +518,10 @@ APPLICANT_CAPTURE_TOOL_INPUT_SCHEMA: dict[str, Any] = {
         },
         "deviceMarketValue": {
             "type": "string",
-            "description": "Current market value of the device as text.",
+            "description": (
+                "Current market value of the device as text. If sourced from OCR, "
+                "use only after the user has verified the extracted data."
+            ),
         },
         "serialNumber": {
             "type": "string",

@@ -167,6 +167,7 @@ Behavior:
 - Returns structured quotation data for the widget
 - Provides the ChatGPT text response with the device category and value
 - Attaches `openai/outputTemplate` metadata for `ui://widget/quote.html`
+- Can be started from manual device details or from a user-submitted receipt. For receipt-first flows, ChatGPT OCR extracts visible data, shows the captured fields back to the user, and waits for explicit verification or corrections before continuing to quotes, intake questions, or capture.
 
 ### `capture-applicant-values`
 
@@ -181,19 +182,22 @@ Behavior:
 
 - Calls Fidamy’s intent endpoint
 - Returns a checkout URL for the selected package
+- Must only be called after the user has verified all captured data, including any values extracted from receipt OCR.
 
 ## User Flow
 
-1. User asks for device insurance.
-2. ChatGPT calls `quote`.
-3. The widget renders available monthly/yearly packages.
-4. User expands package rows to inspect details like fall impact damage, screen breakage, theft, pickpocketing, and robbery.
-5. User selects a package.
-6. The widget saves the selection with `window.openai.setWidgetState`.
-7. The widget sends a follow-up message asking whether the user wants to continue purchasing the package.
-8. If the user confirms, ChatGPT collects the required applicant/device details one by one.
-9. ChatGPT calls `capture-applicant-values`.
-10. The server returns a checkout link.
+1. User asks for device insurance or submits a receipt for OCR extraction.
+2. If a receipt is submitted, ChatGPT extracts visible fields, shows the captured data back to the user, and stops until the user explicitly verifies or corrects it.
+3. ChatGPT calls `quote` once the device category and current market value are available.
+4. The widget renders available monthly/yearly packages.
+5. User expands package rows to inspect details like fall impact damage, screen breakage, theft, pickpocketing, and robbery.
+6. User selects a package.
+7. The widget saves the selection with `window.openai.setWidgetState`.
+8. The widget sends a follow-up message asking whether the user wants to continue purchasing the package.
+9. If the user confirms, ChatGPT collects any missing required applicant/device details one by one.
+10. ChatGPT shows all captured values back to the user when OCR values are involved and proceeds only after verification.
+11. ChatGPT calls `capture-applicant-values`.
+12. The server returns a checkout link.
 
 ## Notes
 

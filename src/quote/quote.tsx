@@ -1,7 +1,6 @@
 import "./quote.css";
 
 import { useEffect, useState } from "react";
-import { buildCapturePrompt } from "./utils";
 
 import { useOpenAiGlobal } from "../use-openai-global";
 import { useWidgetProps } from "../use-widget-props";
@@ -82,18 +81,38 @@ export function App() {
     };
 
     setSelection(nextState);
-    if (!window.openai?.sendFollowUpMessage) {
-      console.error("sendFollowUpMessage is not available in this context.");
+    if (!window.openai?.callTool || !window.openai?.sendFollowUpMessage) {
+      console.error(
+        "callTool or sendFollowUpMessage is not available in this context.",
+      );
       return;
     }
 
     try {
-      await window.openai.sendFollowUpMessage({
-        prompt: buildCapturePrompt({
-          ...nextState,
+      console.log("Calling prepare-capture-flow with:", {
+        selectedPlanLabel: nextState.selectedPlanLabel,
+        selectedBillingPeriod: nextState.selectedBillingPeriod,
+        selectedPremium: nextState.selectedPremium,
+        deviceCategory,
+        deviceMarketValue,
+      });
+      const promptResponse = await window.openai.callTool(
+        "prepare-capture-flow",
+        {
+          selectedPlanLabel: nextState.selectedPlanLabel,
+          selectedBillingPeriod: nextState.selectedBillingPeriod,
+          selectedPremium: nextState.selectedPremium,
           deviceCategory,
           deviceMarketValue,
-        }),
+        },
+      );
+      const prompt = String(promptResponse.result ?? "").trim();
+      if (!prompt) {
+        throw new Error("prepare-capture-flow returned an empty prompt.");
+      }
+
+      await window.openai.sendFollowUpMessage({
+        prompt,
       });
     } catch (error) {
       console.error(
@@ -119,9 +138,7 @@ export function App() {
       )}
 
       {!isLoading && selectedPlanId ? (
-        <SelectionSummary
-          selection={selection}
-        />
+        <SelectionSummary selection={selection} />
       ) : null}
     </div>
   );
