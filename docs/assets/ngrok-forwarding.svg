@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1664" height="768" viewBox="0 0 1664 768" role="img" aria-labelledby="title desc">
+  <title id="title">ngrok terminal showing an active forwarding URL</title>
+  <desc id="desc">Example ngrok output with session status online and a forwarding HTTPS URL to localhost port 8000.</desc>
+  <rect width="1664" height="768" fill="#050505"/>
+  <text x="2" y="28" fill="#27f1f1" font-family="Menlo, Consolas, monospace" font-size="28" font-weight="700">ngrok</text>
+  <text x="1416" y="28" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">(Ctrl+C to quit)</text>
+
+  <text x="2" y="92" fill="#df39e9" font-family="Menlo, Consolas, monospace" font-size="28">Request early access to new features: https://dashboard.ngrok.com/early-access</text>
+
+  <text x="2" y="160" fill="#00e51f" font-family="Menlo, Consolas, monospace" font-size="28">Session Status</text>
+  <text x="422" y="160" fill="#00e51f" font-family="Menlo, Consolas, monospace" font-size="28">online</text>
+
+  <text x="2" y="195" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Account</text>
+  <text x="422" y="195" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">your-account@example.com (Plan: Free)</text>
+
+  <text x="2" y="230" fill="#d9e100" font-family="Menlo, Consolas, monospace" font-size="28">Update</text>
+  <text x="422" y="230" fill="#d9e100" font-family="Menlo, Consolas, monospace" font-size="28">update complete, restart for new version!</text>
+
+  <text x="2" y="265" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Version</text>
+  <text x="422" y="265" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">3.39.2</text>
+
+  <text x="2" y="300" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Region</text>
+  <text x="422" y="300" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Europe (eu)</text>
+
+  <text x="2" y="335" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Latency</text>
+  <text x="422" y="335" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">12ms</text>
+
+  <text x="2" y="370" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Web Interface</text>
+  <text x="422" y="370" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">http://127.0.0.1:4040</text>
+
+  <text x="2" y="405" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Forwarding</text>
+  <text x="422" y="405" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">https://rockiness-unsealed-chitchat.ngrok-free.dev -&gt; http://localhost:8000</text>
+
+  <text x="2" y="468" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">Connections</text>
+  <text x="422" y="468" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">ttl</text>
+  <text x="534" y="468" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">opn</text>
+  <text x="646" y="468" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">rt1</text>
+  <text x="758" y="468" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">rt5</text>
+  <text x="870" y="468" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">p50</text>
+  <text x="982" y="468" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">p90</text>
+
+  <text x="422" y="503" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">138</text>
+  <text x="534" y="503" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">0</text>
+  <text x="646" y="503" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">0.00</text>
+  <text x="758" y="503" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">0.00</text>
+  <text x="870" y="503" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">5.01</text>
+  <text x="982" y="503" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">5.91</text>
+
+  <text x="2" y="568" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">HTTP Requests</text>
+  <text x="2" y="603" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">-------------</text>
+
+  <text x="2" y="670" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">10:11:22.665 CEST POST /mcp</text>
+  <text x="690" y="670" fill="#d7d7d7" font-family="Menlo, Consolas, monospace" font-size="28">200 OK</text>
+</svg>
